@@ -1,18 +1,55 @@
 import numpy as np
 import cv2 as cv
-from multiprocessing import Process, Queue
-import time
-from glob import glob
 import matplotlib.pyplot as plt
 import matplotlib
-import pickle
+from AdaptiveMask import AdaptiveMask
 
 matplotlib.use('Qt5Agg')
 
 
 def main():
     # test_data_from_contours()
-    show_test_data(3)
+    run_test(3)
+
+
+def run_test(num):
+    screen_res = (1920, 1080)
+    calib_box = [500, 1400, 300, 840]  # part of the screen that is seen by camera, from calibration [xmin, xmax, ymin, ymax]
+    s0, s1 = slice(calib_box[0], calib_box[1]), slice(calib_box[2], calib_box[3])
+
+    tdata = np.load('test_data/test_data{:d}.npy'.format(num))
+    mask = AdaptiveMask(100, calib_box)
+
+    plt.ion()
+    fig, ax = plt.subplots()
+    for n in range(tdata.shape[2]):
+        # set up screen
+        screen = np.zeros((screen_res[1], screen_res[0]), dtype=np.uint8)
+        cam = 255 - cv.resize(tdata[:, :, n], (calib_box[1]-calib_box[0], calib_box[3]-calib_box[2]))
+        screen[s1, s0] = cam
+
+        # update screen with cpoints
+        _, screen, _, _ = cv.floodFill(screen, np.zeros((screen.shape[0]+2, screen.shape[1]+2), dtype=np.uint8), (0, 0), 255)
+        for i in range(1, len(mask.cpoints)+1):
+            d = mask.cpoints[i%len(mask.cpoints)] - mask.cpoints[i - 1]
+            for x in np.linspace(0, 1, int(np.sqrt(d[0]**2 + d[1]**2)) * 2):
+                jj, ii = int(mask.cpoints[i-1, 0] + x * d[0]), int(mask.cpoints[i-1, 1] + x * d[1])
+                screen[ii, jj] = 0
+
+        _, screen, _, _ = cv.floodFill(screen, np.zeros((screen.shape[0] + 2, screen.shape[1] + 2), dtype=np.uint8), (0, 0), 0)
+
+        # update control points
+        mask.update(screen[s1, s0])
+
+        ax.clear()
+        ax.imshow(screen, cmap='gray')
+        ax.set_title(str(n))
+        ax.invert_yaxis()
+
+        ax.plot(mask.cpoints[:, 0], mask.cpoints[:, 1], '.r')
+        plt.pause(.1)
+    plt.ioff()
+    plt.show()
 
 
 def show_test_data(num):
@@ -47,8 +84,6 @@ def test_data_from_contours():
         print("\r{:d}/{:d}".format(n, len(cntrs)), end='')
 
     np.save('test_data/test_data3.npy', data)
-
-
 
 
 if __name__ == '__main__':
