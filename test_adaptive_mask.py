@@ -20,9 +20,10 @@ def run_test(num):
     tdata = np.load('test_data/test_data{:d}.npy'.format(num))
     mask = AdaptiveMask(100, calib_box)
 
-    plt.ion()
+    # plt.ion()
     fig, ax = plt.subplots()
     for n in range(tdata.shape[2]):
+        # fig, ax = plt.subplots()
         # set up screen
         screen = np.zeros((screen_res[1], screen_res[0]), dtype=np.uint8)
         cam = 255 - cv.resize(tdata[:, :, n], (calib_box[1]-calib_box[0], calib_box[3]-calib_box[2]))
@@ -30,24 +31,27 @@ def run_test(num):
 
         # update screen with cpoints
         _, screen, _, _ = cv.floodFill(screen, np.zeros((screen.shape[0]+2, screen.shape[1]+2), dtype=np.uint8), (0, 0), 255)
-        for i in range(1, len(mask.cpoints)+1):
-            d = mask.cpoints[i%len(mask.cpoints)] - mask.cpoints[i - 1]
+        curve = mask.curve()
+        for i in range(1, len(curve)+1):
+            d = curve[i%len(curve)] - curve[i - 1]
             for x in np.linspace(0, 1, int(np.sqrt(d[0]**2 + d[1]**2)) * 2):
-                jj, ii = int(mask.cpoints[i-1, 0] + x * d[0]), int(mask.cpoints[i-1, 1] + x * d[1])
+                jj, ii = int(curve[i-1, 0] + x * d[0]), int(curve[i-1, 1] + x * d[1])
                 screen[ii, jj] = 0
 
         _, screen, _, _ = cv.floodFill(screen, np.zeros((screen.shape[0] + 2, screen.shape[1] + 2), dtype=np.uint8), (0, 0), 0)
-
-        # update control points
-        mask.update(screen[s1, s0])
 
         ax.clear()
         ax.imshow(screen, cmap='gray')
         ax.set_title(str(n))
         ax.invert_yaxis()
 
-        ax.plot(mask.cpoints[:, 0], mask.cpoints[:, 1], '.r')
+        # update control points
+        mask.update(screen[s1, s0])
+
+        # curve = mask.curve()
+        # ax.plot(curve[:, 0], curve[:, 1], '-r')
         plt.pause(.1)
+        # plt.show()
     plt.ioff()
     plt.show()
 
