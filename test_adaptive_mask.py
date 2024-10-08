@@ -9,7 +9,7 @@ matplotlib.use('Qt5Agg')
 
 def main():
     # test_data_from_contours()
-    run_test(3)
+    run_test(2)
 
 
 def run_test(num):
@@ -18,35 +18,31 @@ def run_test(num):
     s0, s1 = slice(calib_box[0], calib_box[1]), slice(calib_box[2], calib_box[3])
 
     tdata = np.load('test_data/test_data{:d}.npy'.format(num))
-    mask = AdaptiveMask(100, calib_box)
+    mask = AdaptiveMask(1000, calib_box)
 
     # plt.ion()
-    fig, ax = plt.subplots()
+    fig, axes = plt.subplots(2, 1)
     for n in range(tdata.shape[2]):
         # fig, ax = plt.subplots()
-        # set up screen
-        screen = np.zeros((screen_res[1], screen_res[0]), dtype=np.uint8)
+        screen = mask.screen
+
         cam = 255 - cv.resize(tdata[:, :, n], (calib_box[1]-calib_box[0], calib_box[3]-calib_box[2]))
-        screen[s1, s0] = cam
+        s = (cv.blur(screen[s1, s0], (21, 21))).astype(np.uint8)
+        cam[cam == 255] = s[cam == 255]
 
-        # update screen with cpoints
-        _, screen, _, _ = cv.floodFill(screen, np.zeros((screen.shape[0]+2, screen.shape[1]+2), dtype=np.uint8), (0, 0), 255)
-        curve = mask.curve()
-        for i in range(1, len(curve)+1):
-            d = curve[i%len(curve)] - curve[i - 1]
-            for x in np.linspace(0, 1, int(np.sqrt(d[0]**2 + d[1]**2)) * 2):
-                jj, ii = int(curve[i-1, 0] + x * d[0]), int(curve[i-1, 1] + x * d[1])
-                screen[ii, jj] = 0
+        # screen[s1, s0] = cam
 
-        _, screen, _, _ = cv.floodFill(screen, np.zeros((screen.shape[0] + 2, screen.shape[1] + 2), dtype=np.uint8), (0, 0), 0)
+        axes[0].clear()
+        axes[0].imshow(screen, cmap='gray')
+        axes[0].set_title(str(n))
+        axes[0].invert_yaxis()
 
-        ax.clear()
-        ax.imshow(screen, cmap='gray')
-        ax.set_title(str(n))
-        ax.invert_yaxis()
+        axes[1].clear()
+        axes[1].imshow(cam, cmap='gray')
+        axes[1].set_title(str(n))
+        axes[1].invert_yaxis()
 
-        # update control points
-        mask.update(screen[s1, s0])
+        mask.update(cam)
 
         # curve = mask.curve()
         # ax.plot(curve[:, 0], curve[:, 1], '-r')
