@@ -8,13 +8,16 @@ matplotlib.use('Qt5Agg')
 
 
 def main():
-    # test_data_from_contours()
-    run_test(2)
+    # test_data_from_vc_contours()
+    # show_test_data(4)
+    # test_data_from_hc_contours()
+    run_test(1)
 
 
 def run_test(num):
     screen_res = (1920, 1080)
     calib_box = [500, 1400, 300, 840]  # part of the screen that is seen by camera, from calibration [xmin, xmax, ymin, ymax]
+    # calib_box = [500, 860, 180, 1080]
     s0, s1 = slice(calib_box[0], calib_box[1]), slice(calib_box[2], calib_box[3])
 
     tdata = np.load('test_data/test_data{:d}.npy'.format(num))
@@ -36,11 +39,13 @@ def run_test(num):
         axes[0].imshow(screen, cmap='gray')
         axes[0].set_title(str(n))
         axes[0].invert_yaxis()
+        axes[1].tick_params(labelleft=False, left=False, labelbottom=False, bottom=False)
 
         axes[1].clear()
         axes[1].imshow(cam, cmap='gray')
         axes[1].set_title(str(n))
         axes[1].invert_yaxis()
+        axes[1].tick_params(labelleft=False, left=False, labelbottom=False, bottom=False)
 
         mask.update(cam)
 
@@ -67,7 +72,7 @@ def show_test_data(num):
     plt.show()
 
 
-def test_data_from_contours():
+def test_data_from_hc_contours():
     resolution = (600, 1000)
     cntrs = [np.load('hc_contours/S10/t{:04d}.npy'.format(i)) for i in range(0, 1711, 10)]
     fac = 0.8 * min(resolution) / (np.max(cntrs[0][:, 0]) - np.min(cntrs[0][:, 0]))
@@ -84,6 +89,27 @@ def test_data_from_contours():
         print("\r{:d}/{:d}".format(n, len(cntrs)), end='')
 
     np.save('test_data/test_data3.npy', data)
+
+
+def test_data_from_vc_contours():
+    import pickle
+    resolution = (1000, 400)
+    with open('vc_contours/contours_a1.pkl', 'rb') as f:
+        cntrs = pickle.load(f)
+    fac = 0.8 * min(resolution[0]/(np.max(cntrs[0][:, 1]) - np.min(cntrs[0][:, 1])), resolution[1]/(np.max(cntrs[0][:, 0]) - np.min(cntrs[0][:, 0])))
+    midpoint = np.array([resolution[1]/2 - fac * np.mean(cntrs[0][:, 0]), 0])
+    cntrs = [(c * fac + midpoint).astype(np.int32) for c in cntrs]
+
+    data = np.zeros((resolution[0], resolution[1], len(cntrs)), dtype=np.uint8)
+    for n, c in enumerate(cntrs):
+        for i, j in c:
+            data[j, i, n] = 255
+        seed_point = np.mean(c, axis=0, dtype=np.int32)
+        _, img, _, _ = cv.floodFill(data[:, :, n].copy(), np.zeros((resolution[0] + 2, resolution[1] + 2), dtype=np.uint8), seed_point, 255)
+        data[:, :, n] = np.flipud(img)
+        print("\r{:d}/{:d}".format(n, len(cntrs)), end='')
+
+    np.save('test_data/test_data4.npy', data)
 
 
 if __name__ == '__main__':
