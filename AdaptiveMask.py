@@ -5,10 +5,9 @@ from math import factorial
 
 
 class AdaptiveMask:
-    def __init__(self, n_points, view_box, screen_res=(1920, 1080)):
-        self.np = n_points  # number of points around the edge of the contour
+    def __init__(self, view_box, screen_size=(1920, 1080), **kwargs):
         self.vbox = view_box  # [xmin, xmax, ymin, ymax] in screen coordinates of the field of view of the camera
-        self.screen = np.zeros((screen_res[1], screen_res[0]), dtype=np.uint8)
+        self.screen = np.zeros((screen_size[1], screen_size[0]), dtype=np.uint8)
         self.screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = 255
         self.p0 = 0.1  # factor that controls how dot size depends on distance to ice (aggressiveness)
         self.p1 = 10  # desired distance to ice in pixels
