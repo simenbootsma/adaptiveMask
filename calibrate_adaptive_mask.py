@@ -23,13 +23,14 @@ def main():
     cam = q.get()
 
     # find what part of the screen is viewed by camera
-    calibrate(screen, cam, use_mask=True)
+    calib = calibrate(screen, cam, use_mask=True)
 
-    # TODO: repeat until satisfied
+    # show result
+    check_calibration(screen, cam, calib)
 
 
 def calibrate(screen, cam, use_mask=False):
-    # assumption: cam image is larger than that displayed on screen
+    # assumption: cam image is larger than the same part displayed on screen
     # TODO: rotate cam image using EXIF when necessary
 
     if use_mask:
@@ -56,11 +57,17 @@ def calibrate(screen, cam, use_mask=False):
     # of the bounding box based on the resized ratio
     (startX, startY) = result[1]
     (endX, endY) = (int(startX + cam.shape[1] * result[2]), int(startY + cam.shape[0] * result[2]))
+    calib = [startX - screen.shape[1] // 2, endX - screen.shape[1] // 2, startY - screen.shape[0] // 2,
+             endY - screen.shape[0] // 2]
+    return calib
 
+
+def check_calibration(screen, cam, view_box):
     # draw a bounding box around the detected result and display the image
-    cv.rectangle(pad_screen, (startX, startY), (endX, endY), (0, 0, 255), 2)
-    cv.imshow("Image", pad_screen)
-    cv.imshow("Cam", cv.resize(cam, (int(cam.shape[1] * result[2]), int(cam.shape[0] * result[2]))))
+    cv.rectangle(screen, (view_box[0], view_box[2]), (view_box[1], view_box[3]), (0, 0, 255), 2)
+    resized_cam = cv.resize(cam, (view_box[1]-view_box[0], view_box[3]-view_box[2]))
+    screen[view_box[2]:view_box[3], view_box[0]:view_box[1]] = resized_cam
+    cv.imshow("Image", screen)
     cv.waitKey(0)
 
 
