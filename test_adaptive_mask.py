@@ -16,8 +16,8 @@ def main():
 
 def run_test(num):
     screen_res = (1920, 1080)
-    calib_box = [500, 1400, 300, 840]  # part of the screen that is seen by camera, from calibration [xmin, xmax, ymin, ymax]
-    # calib_box = [500, 860, 180, 1080]
+    calib_box = [500, 1400, 300, 840]  # (test cases 1,2,3) part of the screen that is seen by camera, from calibration [xmin, xmax, ymin, ymax]
+    # calib_box = [500, 860, 180, 1080]  # (test cases 4,5,6)
     s0, s1 = slice(calib_box[0], calib_box[1]), slice(calib_box[2], calib_box[3])
 
     tdata = np.load('test_data/test_data{:d}.npy'.format(num))

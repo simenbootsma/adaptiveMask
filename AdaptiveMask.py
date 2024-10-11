@@ -16,7 +16,6 @@ class AdaptiveMask:
 
     def update(self, cam):
         top_left = np.array([self.vbox[0], self.vbox[2]])
-        box_center = np.array([(self.vbox[1] + self.vbox[0]) / 2, (self.vbox[3] + self.vbox[2]) / 2])
         mask, ice = find_mask_and_ice(cam)
         mask = fill_border(mask, 1)
         ice = fill_border(ice, 0, n=5)
@@ -46,9 +45,16 @@ class AdaptiveMask:
                 dsz = int(abs(self.p0 * di))
                 self.screen[i-dsz:i+dsz, j-dsz:j+dsz] = 0 if di > 0 else 255
 
+        # force any regions outside of camera view box to be black
+        self.screen[:self.vbox[2], :] = 0
+        self.screen[self.vbox[3]:, :] = 0
+        self.screen[:, self.vbox[0]] = 0
+        self.screen[:, self.vbox[1]:] = 0
+
         # smoothen
         self.screen = cv.blur(self.screen, (self.p1//2, self.p1//2))
         _, self.screen = cv.threshold(self.screen, 127, 255, cv.THRESH_BINARY)
+
 
 def find_mask_and_ice(img):
     # assumes gray image
