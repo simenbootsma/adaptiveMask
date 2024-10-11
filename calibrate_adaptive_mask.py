@@ -2,10 +2,13 @@ import numpy as np
 import cv2 as cv
 import matplotlib
 from multiprocessing import Process, Queue
+from datetime import datetime
+import os.path
 
 
 matplotlib.use('Qt5Agg')
 mask_points = []
+SAVE_FOLDER = 'calibration_files/'
 
 
 def main():
@@ -24,6 +27,9 @@ def main():
 
     # find what part of the screen is viewed by camera
     calib = calibrate(screen, cam, use_mask=True)
+
+    # save result
+    save_calibration(screen.shape, calib)
 
     # show result
     check_calibration(screen, cam, calib)
@@ -121,6 +127,28 @@ def draw_circle(event, x, y, flags, param):
     if event == cv.EVENT_LBUTTONUP:
         mask_points.append([x, y])
         cv.circle(param, (x, y), 30, (0, 0, 255), -1)
+
+
+def save_calibration(screen_size, view_box):
+    global SAVE_FOLDER
+
+    size = (view_box[1]-view_box[0], view_box[3]-view_box[2])
+    center = ((view_box[1] + view_box[0])/2, (view_box[3] + view_box[2])/2)
+
+    # Save result
+    calib = 'ADAPTIVE MASK CALIBRATION\n' + datetime.today().ctime() + '\n' + '-'*50
+    calib += '\nview_box : ({:d}, {:d})'.format(*view_box)  # coordinates (xmin, xmax, ymin, ymax) of view box on screen
+    calib += '\nsize : ({:d}, {:d})'.format(*size)  # size (w, h) of view box on screen
+    calib += '\ncenter : ({:d}, {:d})'.format(*center)  # center (x, y) of view box on screen
+    calib += '\nscreen_size : ({:d}, {:d})'.format(*screen_size)  # dimensions of the screen in pixels
+
+    tdy = datetime.today()
+    filename = 'adaptive_mask_calibration_{:04d}{:02d}{:02d}{:02d}{:02d}{:02d}.txt'.format(tdy.year, tdy.month, tdy.day, tdy.hour, tdy.minute, tdy.second)
+    with open(SAVE_FOLDER + filename, 'w') as f:
+        f.write(calib)
+    if SAVE_FOLDER == '':
+        SAVE_FOLDER = os.path.abspath(os.getcwd())
+    print('Saved calibration as {:s}!'.format(SAVE_FOLDER + filename))
 
 
 if __name__ == '__main__':
