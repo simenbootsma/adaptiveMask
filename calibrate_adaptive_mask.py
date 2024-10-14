@@ -17,7 +17,7 @@ cam.setup(cam_settings)
 
 
 def main():
-    screen = cv.imread('polar_bear_mosaic.jpg')
+    screen = cv.imread('polar_bear_mosaic.png')
 
     # show screen and take photo simultaneously
     q = Queue()
