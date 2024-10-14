@@ -10,7 +10,7 @@ from Camera import Camera
 matplotlib.use('Qt5Agg')
 mask_points = []
 SAVE_FOLDER = 'calibration_files/'
-cam_settings = Camera.Settings(aperture=2.5, shutter_speed='1/5', iso=160)
+cam_settings = Camera.Settings(aperture='2.5', shutter_speed='1/5', iso=160)
 cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.exe'
 cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER)
 cam.setup(cam_settings)
@@ -28,31 +28,31 @@ def main():
     p0.join()
     p1.join()
 
-    cam = q.get()
+    cam_img = q.get()
 
     # find what part of the screen is viewed by camera
-    calib = calibrate(screen, cam, use_mask=True)
+    calib = calibrate(screen, cam_img, use_mask=False)
 
     # save result
     save_calibration(screen.shape, calib)
 
     # show result
-    check_calibration(screen, cam, calib)
+    check_calibration(screen, cam_img, calib)
 
 
-def calibrate(screen, cam, use_mask=False):
+def calibrate(screen, cam_img, use_mask=False):
     # assumption: cam image is larger than the same part displayed on screen
     # TODO: rotate cam image using EXIF when necessary
 
     if use_mask:
-        mask0, mask1 = set_rect_mask(cam)
-        cam = cam[mask0[1]:mask1[1], mask0[0]:mask1[0]]
+        mask0, mask1 = set_rect_mask(cam_img)
+        cam_img = cam_img[mask0[1]:mask1[1], mask0[0]:mask1[0]]
 
     result = None
     pad_screen = np.random.randint(0, 255, (screen.shape[0]*2, screen.shape[1]*2, screen.shape[2]), dtype=np.uint8)
     pad_screen[screen.shape[0]//2:3*screen.shape[0]//2, screen.shape[1]//2:3*screen.shape[1]//2] = screen
     for scale in np.linspace(.02, 1.0, 20):
-        resized = cv.resize(cam, (int(cam.shape[1] * scale), int(cam.shape[0] * scale)))
+        resized = cv.resize(cam_img, (int(cam_img.shape[1] * scale), int(cam_img.shape[0] * scale)))
 
         if pad_screen.shape[0] < resized.shape[0] or pad_screen.shape[1] < resized.shape[1]:
             # cam image is larger than padded screen
@@ -67,16 +67,16 @@ def calibrate(screen, cam, use_mask=False):
     # unpack the bookkeeping variable and compute the (x, y) coordinates
     # of the bounding box based on the resized ratio
     (startX, startY) = result[1]
-    (endX, endY) = (int(startX + cam.shape[1] * result[2]), int(startY + cam.shape[0] * result[2]))
+    (endX, endY) = (int(startX + cam_img.shape[1] * result[2]), int(startY + cam_img.shape[0] * result[2]))
     calib = [startX - screen.shape[1] // 2, endX - screen.shape[1] // 2, startY - screen.shape[0] // 2,
              endY - screen.shape[0] // 2]
     return calib
 
 
-def check_calibration(screen, cam, view_box):
+def check_calibration(screen, cam_img, view_box):
     # draw a bounding box around the detected result and display the image
     cv.rectangle(screen, (view_box[0], view_box[2]), (view_box[1], view_box[3]), (0, 0, 255), 2)
-    resized_cam = cv.resize(cam, (view_box[1]-view_box[0], view_box[3]-view_box[2]))
+    resized_cam = cv.resize(cam_img, (view_box[1]-view_box[0], view_box[3]-view_box[2]))
     screen[view_box[2]:view_box[3], view_box[0]:view_box[1]] = resized_cam
     cv.imshow("Image", screen)
     cv.waitKey(0)
@@ -99,18 +99,20 @@ def take_photo(queue):
     image_name = cam.collection_name + '_' + str(cam.image_index) + cam.image_type
     cam.capture_single_image(autofocus=False)
     photo = cv.imread(SAVE_FOLDER + image_name)
+    if photo is None:
+        print("[take_photo]: ERROR! Photo is None, is camera connected?")
     queue.put(photo)
 
 
-def set_rect_mask(cam):
+def set_rect_mask(cam_img):
     global mask_points
     cv.namedWindow("window", cv.WINDOW_NORMAL)
     cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
     print('Click to set 2 corner points')
-    cv.setMouseCallback('window', draw_circle, param=cam)
+    cv.setMouseCallback('window', draw_circle, param=cam_img)
     while len(mask_points) < 2:
-        cv.imshow("window", cam)
+        cv.imshow("window", cam_img)
         key = cv.waitKey(10)
         if key == 27:
             break
@@ -120,8 +122,8 @@ def set_rect_mask(cam):
     p1 = (max(mask_points[0][0], mask_points[1][0]), max(mask_points[0][1], mask_points[1][1]))
 
     cv.namedWindow("window", cv.WINDOW_NORMAL)
-    cv.rectangle(cam, p0, p1, (0, 0, 255), 2)
-    cv.imshow('window', cam)
+    cv.rectangle(cam_img, p0, p1, (0, 0, 255), 2)
+    cv.imshow('window', cam_img)
     cv.waitKey(0)
     cv.destroyAllWindows()
     cv.waitKey(10)
