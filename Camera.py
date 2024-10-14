@@ -102,7 +102,7 @@ class Camera:
         # Write each setting in the settings dictionary to the file as long as the setting is not None
         for setting_name, setting in settings.__dict__().items():
             if setting is not None:
-                file.write(' '*3 + "<setcamera property=\"{:s}\" value=\"{:s}\"/>\n".format(setting_name, setting))
+                file.write(' '*3 + "<setcamera property=\"{:s}\" value=\"{:s}\"/>\n".format(setting_name, str(setting)))
 
     def command_camera(self, command: str) -> None:
         """Creates a call to the camera using DigiCamControl
