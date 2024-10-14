@@ -3,13 +3,16 @@ import cv2 as cv
 from multiprocessing import Process, Queue
 import time
 from glob import glob
-import matplotlib.pyplot as plt
-import matplotlib
 from AdaptiveMask import AdaptiveMask
+from Camera import Camera
 
-matplotlib.use('Qt5Agg')
 
+SAVE_FOLDER = 'auto_images'
 CALIBRATION_FILENAME = None  # leave None to use most recent
+cam_settings = Camera.Settings(aperture=2.5, shutter_speed='1/5', iso=160)
+cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.exe'
+cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER)
+cam.setup(cam_settings)
 
 
 def main():
@@ -61,7 +64,7 @@ def masking_worker(queue):
     st = time.time()
     while True:
         if queue.empty():
-            img = take_image()
+            img = take_photo()
             mask.update(img)
             queue.put(mask.screen)
             st = time.time()
@@ -90,8 +93,11 @@ def cv_window():
     # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
 
-def take_image():
-    pass
+def take_photo():
+    image_name = cam.collection_name + '_' + str(cam.image_index) + cam.image_type
+    cam.capture_single_image(autofocus=False)
+    photo = cv.imread(SAVE_FOLDER + image_name)
+    return photo
 
 
 if __name__ == '__main__':

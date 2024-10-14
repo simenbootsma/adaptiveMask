@@ -4,11 +4,16 @@ import matplotlib
 from multiprocessing import Process, Queue
 from datetime import datetime
 import os.path
+from Camera import Camera
 
 
 matplotlib.use('Qt5Agg')
 mask_points = []
 SAVE_FOLDER = 'calibration_files/'
+cam_settings = Camera.Settings(aperture=2.5, shutter_speed='1/5', iso=160)
+cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.exe'
+cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER)
+cam.setup(cam_settings)
 
 
 def main():
@@ -91,8 +96,9 @@ def show_screen(screen, queue):
 
 
 def take_photo(queue):
-    # TODO: insert section to take photo here
-    photo = None
+    image_name = cam.collection_name + '_' + str(cam.image_index) + cam.image_type
+    cam.capture_single_image(autofocus=False)
+    photo = cv.imread(SAVE_FOLDER + image_name)
     queue.put(photo)
 
 
