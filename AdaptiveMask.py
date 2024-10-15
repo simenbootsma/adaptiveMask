@@ -58,6 +58,7 @@ class AdaptiveMask:
 def find_mask_and_ice(img):
     # assumes gray image
     # blur = cv.GaussianBlur(img, (5, 5), sigmaX=0)
+    img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
     ret, otsu = cv.threshold(img.astype(np.uint8), 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
 
     s0, s1 = otsu.shape

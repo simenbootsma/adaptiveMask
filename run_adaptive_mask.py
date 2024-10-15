@@ -7,7 +7,7 @@ from AdaptiveMask import AdaptiveMask
 from Camera import Camera
 
 
-SAVE_FOLDER = 'auto_images'
+SAVE_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'
 CALIBRATION_FILENAME = None  # leave None to use most recent
 cam_settings = Camera.Settings(aperture=2.5, shutter_speed='1/5', iso=160)
 cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.exe'
@@ -77,7 +77,7 @@ def masking_worker(queue):
 def load_calibration():
     global CALIBRATION_FILENAME
     if CALIBRATION_FILENAME is None:
-        CALIBRATION_FILENAME = sorted(glob('calibration_files/*.txt'))[-1]
+        CALIBRATION_FILENAME = sorted(glob('temp_files_calibration/*.txt'))[-1]
     data = {}
     with open(CALIBRATION_FILENAME, 'r') as f:
         for ln in f.read().splitlines():

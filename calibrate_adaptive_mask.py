@@ -9,7 +9,7 @@ from Camera import Camera
 
 matplotlib.use('Qt5Agg')
 mask_points = []
-SAVE_FOLDER = 'calibration_files/'
+SAVE_FOLDER = 'temp_files_calibration/'
 cam_settings = Camera.Settings(aperture='2.5', shutter_speed='1/5', iso=160)
 cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.exe'
 cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER)
@@ -26,12 +26,13 @@ def main():
     p0.start()
     p1.start()
     p0.join()
+    cam_img = q.get()
     p1.join()
 
-    cam_img = q.get()
+    print('took photo! starting calibration...')
 
     # find what part of the screen is viewed by camera
-    calib = calibrate(screen, cam_img, use_mask=False)
+    calib = calibrate(screen, cam_img, use_mask=True)
 
     # save result
     save_calibration(screen.shape, calib)
@@ -84,7 +85,7 @@ def check_calibration(screen, cam_img, view_box):
 
 def show_screen(screen, queue):
     cv.namedWindow("window", cv.WINDOW_NORMAL)
-    # cv.moveWindow("window", 900, 0)
+    cv.moveWindow("window", 900, 0)
     cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
     cv.imshow('window', screen)
 
@@ -93,6 +94,7 @@ def show_screen(screen, queue):
         if key == 27:
             break
     cv.destroyWindow('window')
+    print('done showing screen')
 
 
 def take_photo(queue):
@@ -102,6 +104,7 @@ def take_photo(queue):
     if photo is None:
         print("[take_photo]: ERROR! Photo is None, is camera connected?")
     queue.put(photo)
+    print('done taking photo')
 
 
 def set_rect_mask(cam_img):
@@ -141,11 +144,11 @@ def save_calibration(screen_size, view_box):
     global SAVE_FOLDER
 
     size = (view_box[1]-view_box[0], view_box[3]-view_box[2])
-    center = ((view_box[1] + view_box[0])/2, (view_box[3] + view_box[2])/2)
+    center = (int((view_box[1] + view_box[0])/2), int((view_box[3] + view_box[2])/2))
 
     # Save result
     calib = 'ADAPTIVE MASK CALIBRATION\n' + datetime.today().ctime() + '\n' + '-'*50
-    calib += '\nview_box : ({:d}, {:d})'.format(*view_box)  # coordinates (xmin, xmax, ymin, ymax) of view box on screen
+    calib += '\nview_box : ({:d}, {:d}, {:d}, {:d})'.format(*view_box)  # coordinates (xmin, xmax, ymin, ymax) of view box on screen
     calib += '\nsize : ({:d}, {:d})'.format(*size)  # size (w, h) of view box on screen
     calib += '\ncenter : ({:d}, {:d})'.format(*center)  # center (x, y) of view box on screen
     calib += '\nscreen_size : ({:d}, {:d})'.format(*screen_size)  # dimensions of the screen in pixels
