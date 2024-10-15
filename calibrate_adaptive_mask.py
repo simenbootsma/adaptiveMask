@@ -76,10 +76,13 @@ def calibrate(screen, cam_img, use_mask=False):
 
 def check_calibration(screen, cam_img, view_box):
     # draw a bounding box around the detected result and display the image
+    screen_intensity = np.mean(screen)
+    cam_img = (cam_img.astype(np.float64) / np.mean(cam_img) * screen_intensity).astype(np.uint8)
+
     cv.rectangle(screen, (view_box[0], view_box[2]), (view_box[1], view_box[3]), (0, 0, 255), 2)
     resized_cam = cv.resize(cam_img, (view_box[1]-view_box[0], view_box[3]-view_box[2]))
     screen[view_box[2]:view_box[3], view_box[0]:view_box[1]] = resized_cam
-    cv.imshow("Image", screen)
+    cv.imshow("Image", cv.resize(screen, (screen.shape[1]//2, screen.shape[0]//2)))
     cv.waitKey(0)
 
 
@@ -94,7 +97,6 @@ def show_screen(screen, queue):
         if key == 27:
             break
     cv.destroyWindow('window')
-    print('done showing screen')
 
 
 def take_photo(queue):
@@ -104,7 +106,6 @@ def take_photo(queue):
     if photo is None:
         print("[take_photo]: ERROR! Photo is None, is camera connected?")
     queue.put(photo)
-    print('done taking photo')
 
 
 def set_rect_mask(cam_img):
