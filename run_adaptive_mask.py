@@ -23,9 +23,9 @@ def main():
     p0.start()
     p1.start()
     p0.join()
+    repeat = q.get()
     p1.join()
 
-    repeat = q.get()
     if repeat:
         print('Repeating')
         main()
@@ -35,7 +35,7 @@ def main():
 def show_screen_worker(queue):
     cv_window()
     calib = load_calibration()
-    img = np.ones((calib['screen_size'][0], calib['screen_size'][1], 3))
+    img = np.ones((calib['screen_size'][1], calib['screen_size'][0], 3))
 
     while True:
         if not queue.empty():
@@ -70,7 +70,9 @@ def masking_worker(queue):
             queue.put(mask.screen)
             st = time.time()
         else:
-            time.sleep(0.1)
+            key = cv.waitKey(100)
+            if key == 27:
+                break
         if time.time() - st > 10:
             break  # quit if queue has not been emptied in 10 seconds
 
@@ -97,6 +99,7 @@ def cv_window():
 def take_photo():
     image_name = cam.collection_name + '_' + str(cam.image_index) + cam.image_type
     cam.capture_single_image(autofocus=False)
+    #image_name = '_1.jpg'
     photo = cv.imread(SAVE_FOLDER + image_name)
     return photo
 

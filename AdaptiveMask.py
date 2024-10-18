@@ -6,30 +6,49 @@ from math import factorial
 
 class AdaptiveMask:
     def __init__(self, view_box, **kwargs):
-        ssz = kwargs['screen_size']
         self.vbox = view_box  # [xmin, xmax, ymin, ymax] in screen coordinates of the field of view of the camera
-        self.screen = np.zeros((ssz[1], ssz[0]), dtype=np.uint8)
-        self.screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = 255
         self.p0 = 0.1  # factor that controls how dot size depends on distance to ice (aggressiveness)
-        self.p1 = 10  # desired distance to ice in pixels
+        self.p1 = 100  # desired distance to ice in pixels
         self.p2 = 50  # dot size to expand the mask with when ice is not visible
+        self.keep_white = [False, False, False, True]  # left, top, right, bottom: which sides to keep white at all times
+        self.screen = self.init_screen(kwargs['screen_size'])
+
+    def init_screen(self, ssz):
+        screen = np.zeros((ssz[0], ssz[1]), dtype=np.uint8)
+        screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = 255
+        if self.keep_white[0]:
+            screen[self.vbox[2]:self.vbox[3], :self.vbox[1]] = 255
+        if self.keep_white[1]:
+            screen[:self.vbox[3], self.vbox[0]:self.vbox[1]] = 255
+        if self.keep_white[2]:
+            screen[self.vbox[2]:self.vbox[3], self.vbox[0]:] = 255
+        if self.keep_white[3]:
+            screen[self.vbox[2]:, self.vbox[0]:self.vbox[1]] = 255
+        return screen
 
     def update(self, cam):
+        cam = cv.resize(cam, (self.vbox[1]-self.vbox[0], self.vbox[3]-self.vbox[2]))
         top_left = np.array([self.vbox[0], self.vbox[2]])
         mask, ice = find_mask_and_ice(cam)
-        mask = fill_border(mask, 1)
+        mask = fill_border(mask, 1, skip=self.keep_white)
         ice = fill_border(ice, 0, n=5)
         mask_edges = find_edges(mask)
         ice_edges = find_edges(ice)
         screen_edges = find_edges(self.screen)
 
-        # plt.figure()
-        # plt.imshow(ice)
-        # plt.plot(ice_edges[:, 0], ice_edges[:, 1])
-        # plt.show()
-
         # ice_edges += top_left
         # plt.plot(ice_edges[:, 0], ice_edges[:, 1])
+
+        plt.figure()
+        mat = np.zeros(cam.shape[:2])
+        mat += mask
+        mat += ice
+        plt.imshow(mat)
+        if mask_edges is not None:
+            plt.plot(mask_edges[:, 0], mask_edges[:, 1], '.b')
+        if mask_edges is not None:
+            plt.plot(ice_edges[:, 0], ice_edges[:, 1], '-r')
+     
 
         if ice_edges is None:
             # expand mask on all edge points
@@ -37,19 +56,48 @@ class AdaptiveMask:
                 dsz = self.p2
                 self.screen[i-dsz:i+dsz, j-dsz:j+dsz] = 255
         else:
+            #plt.figure()
+            #plt.imshow(cam)
+            #plt.figure()
+            #plt.imshow(mask)
+            #plt.figure()
+            #plt.imshow(ice)
+            #plt.plot(ice_edges[:, 0], ice_edges[:, 1])
+            #plt.show()
             ice_edges += top_left
             mask_edges += top_left
+
+            target_points = []
+            error = 0
             for j, i in screen_edges:
                 cm = mask_edges[np.argmin(np.sum((np.array([j, i]) - mask_edges)**2, axis=1))]  # closest point on mask
                 di = np.min(np.sqrt(np.sum((cm - ice_edges)**2, axis=1))) - self.p1  # distance to ice
                 dsz = int(abs(self.p0 * di))
                 self.screen[i-dsz:i+dsz, j-dsz:j+dsz] = 0 if di > 0 else 255
 
+                ii = np.argmin(np.sqrt(np.sum((cm - ice_edges)**2, axis=1)))
+                target_points.append(cm + (ice_edges[ii] - cm) * dsz/di - top_left)
+                error += di**2 / len(screen_edges)
+            target_points = np.array(target_points)
+            plt.plot(target_points[:, 0], target_points[:, 1], '.g')
+        print("Mean error: {:.0f} pixels".format(np.sqrt(error)))
+        plt.show()
+
         # force any regions outside of camera view box to be black
         self.screen[:self.vbox[2], :] = 0
         self.screen[self.vbox[3]:, :] = 0
-        self.screen[:, self.vbox[0]] = 0
+        self.screen[:, :self.vbox[0]] = 0
         self.screen[:, self.vbox[1]:] = 0
+
+        # force pre-set regions to be white
+        if self.keep_white[0]:
+            self.screen[self.vbox[2]:self.vbox[3], :self.vbox[0]] = 255
+        if self.keep_white[1]:
+            self.screen[:self.vbox[2], self.vbox[0]:self.vbox[1]] = 255
+        if self.keep_white[2]:
+            self.screen[self.vbox[2]:self.vbox[3], self.vbox[1]:] = 255
+        if self.keep_white[3]:
+            self.screen[self.vbox[3]:, self.vbox[0]:self.vbox[1]] = 255
 
         # smoothen
         self.screen = cv.blur(self.screen, (self.p1//2, self.p1//2))
@@ -98,10 +146,14 @@ def find_edges(img, largest_only=False):
         return edges[1:, :]
 
 
-def fill_border(arr, value, n=1):
-    arr[:n, :] = value
-    arr[-n:, :] = value
-    arr[:, :n] = value
-    arr[:, -n:] = value
+def fill_border(arr, value, n=1, skip=None):
+    if skip is None or not skip[0]:
+        arr[:, :n] = value  # left
+    if skip is None or not skip[1]:
+        arr[:n, :] = value  # top
+    if skip is None or not skip[2]:
+        arr[:, -n:] = value  # right
+    if skip is None or not skip[3]:
+        arr[-n:, :] = value  # bottom 
     return arr
 

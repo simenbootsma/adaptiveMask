@@ -32,7 +32,7 @@ def main():
     print('took photo! starting calibration...')
 
     # find what part of the screen is viewed by camera
-    calib = calibrate(screen, cam_img, use_mask=True)
+    calib = calibrate(screen, cam_img, use_mask=False)
 
     # save result
     save_calibration(screen.shape, calib)
@@ -77,11 +77,15 @@ def calibrate(screen, cam_img, use_mask=False):
 def check_calibration(screen, cam_img, view_box):
     # draw a bounding box around the detected result and display the image
     screen_intensity = np.mean(screen)
-    cam_img = (cam_img.astype(np.float64) / np.mean(cam_img) * screen_intensity).astype(np.uint8)
+    cam_img = cam_img.astype(np.float64) / np.mean(cam_img) * screen_intensity
+    cam_img[cam_img > 255] = 255
+    cam_img = cam_img.astype(np.uint8)
 
     cv.rectangle(screen, (view_box[0], view_box[2]), (view_box[1], view_box[3]), (0, 0, 255), 2)
     resized_cam = cv.resize(cam_img, (view_box[1]-view_box[0], view_box[3]-view_box[2]))
-    screen[view_box[2]:view_box[3], view_box[0]:view_box[1]] = resized_cam
+    dx0, dx1 = max(0, -view_box[0]), max(0, view_box[1]-screen.shape[1])
+    dy0, dy1 = max(0, -view_box[2]), max(0, view_box[3]-screen.shape[0])
+    screen[(view_box[2] + dy0):(view_box[3] - dy1), (view_box[0] + dx0):(view_box[1]-dx1)] = resized_cam[dy0:resized_cam.shape[0]-dy1, dx0:resized_cam.shape[1]-dx1]
     cv.imshow("Image", cv.resize(screen, (screen.shape[1]//2, screen.shape[0]//2)))
     cv.waitKey(0)
 
