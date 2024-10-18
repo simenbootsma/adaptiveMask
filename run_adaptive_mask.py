@@ -34,7 +34,8 @@ def main():
 
 def show_screen_worker(queue):
     cv_window()
-    img = np.ones((1000, 1000, 3))
+    calib = load_calibration()
+    img = np.ones((calib['screen_size'][0], calib['screen_size'][1], 3))
 
     while True:
         if not queue.empty():
