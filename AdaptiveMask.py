@@ -7,11 +7,12 @@ from math import factorial
 class AdaptiveMask:
     def __init__(self, view_box, **kwargs):
         self.vbox = view_box  # [xmin, xmax, ymin, ymax] in screen coordinates of the field of view of the camera
-        self.p0 = 0.1  # factor that controls how dot size depends on distance to ice (aggressiveness)
-        self.p1 = 100  # desired distance to ice in pixels
+        self.p0 = 0.2  # factor that controls how dot size depends on distance to ice (aggressiveness)
+        self.p1 = 10  # desired distance to ice in pixels
         self.p2 = 50  # dot size to expand the mask with when ice is not visible
         self.keep_white = [False, False, False, True]  # left, top, right, bottom: which sides to keep white at all times
         self.screen = self.init_screen(kwargs['screen_size'])
+        self.cam_crop = kwargs['mask_box']  # [xmin, xmax, ymin, ymax] in screen coordinates of the part of camera image that is on screen
 
     def init_screen(self, ssz):
         screen = np.zeros((ssz[0], ssz[1]), dtype=np.uint8)
@@ -27,7 +28,10 @@ class AdaptiveMask:
         return screen
 
     def update(self, cam):
+        cam = cam[self.cam_crop[2]:self.cam_crop[3], self.cam_crop[0]:self.cam_crop[1]]
         cam = cv.resize(cam, (self.vbox[1]-self.vbox[0], self.vbox[3]-self.vbox[2]))
+        cam = fill_border(cam, 255, n=10, skip=[not bl for bl in self.keep_white])
+        
         top_left = np.array([self.vbox[0], self.vbox[2]])
         mask, ice = find_mask_and_ice(cam)
         mask = fill_border(mask, 1, skip=self.keep_white)
@@ -36,18 +40,22 @@ class AdaptiveMask:
         ice_edges = find_edges(ice)
         screen_edges = find_edges(self.screen)
 
+        # Remove box edges
+        mask_edges = mask_edges[(mask_edges[:, 0] % mask.shape[1]-1) != 0]
+        mask_edges = mask_edges[(mask_edges[:, 1] % mask.shape[0]-1) != 0]
+
         # ice_edges += top_left
         # plt.plot(ice_edges[:, 0], ice_edges[:, 1])
 
-        plt.figure()
-        mat = np.zeros(cam.shape[:2])
-        mat += mask
-        mat += ice
-        plt.imshow(mat)
-        if mask_edges is not None:
-            plt.plot(mask_edges[:, 0], mask_edges[:, 1], '.b')
-        if mask_edges is not None:
-            plt.plot(ice_edges[:, 0], ice_edges[:, 1], '-r')
+        #plt.figure()
+        #mat = np.zeros(cam.shape[:2])
+        #mat += mask
+        #mat += 2 * ice
+        #plt.imshow(mat)
+        #if mask_edges is not None:
+        #    plt.plot(mask_edges[:, 0], mask_edges[:, 1], '.b')
+        #if ice_edges is not None:
+        #    plt.plot(ice_edges[:, 0], ice_edges[:, 1], '-r')
      
 
         if ice_edges is None:
@@ -68,7 +76,7 @@ class AdaptiveMask:
             mask_edges += top_left
 
             target_points = []
-            error = 0
+            errors = []
             for j, i in screen_edges:
                 cm = mask_edges[np.argmin(np.sum((np.array([j, i]) - mask_edges)**2, axis=1))]  # closest point on mask
                 di = np.min(np.sqrt(np.sum((cm - ice_edges)**2, axis=1))) - self.p1  # distance to ice
@@ -77,11 +85,11 @@ class AdaptiveMask:
 
                 ii = np.argmin(np.sqrt(np.sum((cm - ice_edges)**2, axis=1)))
                 target_points.append(cm + (ice_edges[ii] - cm) * dsz/di - top_left)
-                error += di**2 / len(screen_edges)
+                errors.append(di**2)
             target_points = np.array(target_points)
-            plt.plot(target_points[:, 0], target_points[:, 1], '.g')
-        print("Mean error: {:.0f} pixels".format(np.sqrt(error)))
-        plt.show()
+            #plt.plot(target_points[:, 0], target_points[:, 1], '.g')
+            print("Min error: {:.0f} px  | Max error: {:.0f}  |  Mean error: {:.0f} pixels  |  Median error: {:.0f}".format(np.sqrt(np.min(errors)), np.sqrt(np.max(errors)), np.sqrt(np.mean(errors)), np.sqrt(np.median(errors))))
+        #plt.show()
 
         # force any regions outside of camera view box to be black
         self.screen[:self.vbox[2], :] = 0

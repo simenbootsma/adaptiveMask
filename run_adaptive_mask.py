@@ -23,8 +23,9 @@ def main():
     p0.start()
     p1.start()
     p0.join()
-    repeat = q.get()
-    p1.join()
+    repeat = q.get(timeout=10)
+    p1.join(timeout=10)
+    q.close()
 
     if repeat:
         print('Repeating')
@@ -59,9 +60,6 @@ def masking_worker(queue):
     mask = AdaptiveMask(**calib)
     queue.put(mask.screen)
 
-    print('press <any key> to start adaptive masking')
-    cv.waitKey()
-
     st = time.time()
     while True:
         if queue.empty():
@@ -70,10 +68,9 @@ def masking_worker(queue):
             queue.put(mask.screen)
             st = time.time()
         else:
-            key = cv.waitKey(100)
-            if key == 27:
-                break
+            time.sleep(0.1)
         if time.time() - st > 10:
+            print("[masking_worker] received no image in 10 seconds, quitting...")
             break  # quit if queue has not been emptied in 10 seconds
 
 
