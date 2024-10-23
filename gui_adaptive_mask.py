@@ -17,7 +17,7 @@ layout = [
 ]
 
 
-window = sg.Window('Adaptive mask', layout, font=("Helevtica", 16))
+window = sg.Window('Adaptive mask', layout, font=("Helvetica", 16))
 
 while True:
     event, values = window.read()
