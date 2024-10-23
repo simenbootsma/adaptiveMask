@@ -36,17 +36,15 @@ def main(args):
     use_mask = len(args) > 1 and ('mask' in args[1])
     calib = calibrate(screen, cam_img, use_mask=use_mask)
 
-    # save result
-    save_calibration(screen.shape, calib)
-
     # show result
-    check_calibration(screen, cam_img, calib)
+    keep_sides = check_calibration(screen, cam_img, calib)
+
+    # save result
+    save_calibration(screen.shape, calib, keep_sides)
 
 
 def calibrate(screen, cam_img, use_mask=False):
     # assumption: cam image is larger than the same part displayed on screen
-    # TODO: rotate cam image using EXIF when necessary
-
     if use_mask:
         mask0, mask1 = set_rect_mask(cam_img)
         cam_img = cam_img[mask0[1]:mask1[1], mask0[0]:mask1[0]]
@@ -76,25 +74,57 @@ def calibrate(screen, cam_img, use_mask=False):
 
 
 def check_calibration(screen, cam_img, calib):
+    def draw_circle(event, x, y, flags, param):
+        if event == cv.EVENT_LBUTTONUP:
+            box_corners = [np.array([view_box[0], view_box[2]])/2, np.array([view_box[0], view_box[3]])/2,
+                           np.array([view_box[1], view_box[2]])/2, np.array([view_box[1], view_box[3]])/2]
+            ind = np.argsort([np.sum([(np.array([x, y] - bc)) ** 2]) for bc in
+                              box_corners])  # indices of box corners sorted by distance to clicked point
+            edge_ind = [None, 0, 1, None, 2, 3][
+                ind[0] + ind[1]]  # 0 and 3 are impossible, as 3 would be opposing corners
+            keep_edge[edge_ind] = not keep_edge[edge_ind]
+            draw_edges()
+
+    def draw_edges():
+        # Redraw edges
+        box_corners = [[view_box[0]//2, view_box[2]//2], [view_box[0]//2, view_box[3]//2],
+                       [view_box[1]//2, view_box[2]//2], [view_box[1]//2, view_box[3]//2]]
+        bc_ind = [[0, 1], [0, 2], [1, 3],
+                  [2, 3]]  # indices of box corners corresponding to edges: left, top, bottom, right
+        for i in range(4):
+            color = (0, 255, 0) if keep_edge[i] else (0, 0, 255)
+            p1, p2 = box_corners[bc_ind[i][0]], box_corners[bc_ind[i][1]]
+            cv.line(img, p1, p2, color=color, thickness=2)
+
     # draw a bounding box around the detected result and display the image
     screen_intensity = np.mean(screen)
-    
+
     view_box, mask_box = calib
     cam_img = cam_img[mask_box[2]:mask_box[3], mask_box[0]:mask_box[1]]
-    
+
     cam_img = cam_img.astype(np.float64) / np.mean(cam_img) * screen_intensity
     cam_img[cam_img > 255] = 255
     cam_img = cam_img.astype(np.uint8)
 
-    cv.rectangle(screen, (view_box[0], view_box[2]), (view_box[1], view_box[3]), (0, 0, 255), 2)
-    resized_cam = cv.resize(cam_img, (view_box[1]-view_box[0], view_box[3]-view_box[2]))
+    # cv.rectangle(screen, (view_box[0], view_box[2]), (view_box[1], view_box[3]), (0, 0, 255), 2)
+    resized_cam = cv.resize(cam_img, (view_box[1] - view_box[0], view_box[3] - view_box[2]))
     if (view_box[0] < 0) or (view_box[1] >= screen.shape[1]) or (view_box[2] < 0) or (view_box[3] >= screen.shape[0]):
         raise ValueError("View box lies outside of screen, use mask on camera image using the 'mask' flag")
 
+    keep_edge = [True, True, True, True]
     screen[view_box[2]:view_box[3], view_box[0]:view_box[1]] = resized_cam
-    #screen[(view_box[2] + dy0):(view_box[3] - dy1), (view_box[0] + dx0):(view_box[1]-dx1)] = resized_cam[dy0:resized_cam.shape[0]-dy1, dx0:resized_cam.shape[1]-dx1]
-    cv.imshow("Image", cv.resize(screen, (screen.shape[1]//2, screen.shape[0]//2)))
-    cv.waitKey(0)
+    img = cv.resize(screen, (screen.shape[1] // 2, screen.shape[0] // 2))
+    # cv.imshow("Image", img)
+    cv.namedWindow("Image", cv.WINDOW_NORMAL)
+    cv.setMouseCallback('Image', draw_circle)
+    draw_edges()
+    while True:
+        cv.imshow("Image", img)
+        key = cv.waitKey(10)
+        if key == 13 or key == 27 or key == 32:  # enter or escape or space
+            break
+    cv.destroyWindow("Image")
+    return keep_edge
 
 
 def show_screen(screen, queue):
@@ -152,7 +182,7 @@ def draw_circle(event, x, y, flags, param):
         cv.circle(param, (x, y), 30, (0, 0, 255), -1)
 
 
-def save_calibration(screen_size, calib):
+def save_calibration(screen_size, calib, keep_sides):
     global SAVE_FOLDER
 
     view_box, mask_box = calib
@@ -166,6 +196,7 @@ def save_calibration(screen_size, calib):
     calib += '\nsize : ({:d}, {:d})'.format(*size)  # size (w, h) of view box on screen
     calib += '\ncenter : ({:d}, {:d})'.format(*center)  # center (x, y) of view box on screen
     calib += '\nscreen_size : ({:d}, {:d})'.format(*screen_size)  # dimensions of the screen in pixels
+    calib += '\nkeep_sides : ({:d}, {:d}, {:d}, {:d})'.format(*keep_sides)  # which sides to use in the masking 1 = use, 0 = ignore
 
     tdy = datetime.today()
     filename = 'adaptive_mask_calibration_{:04d}{:02d}{:02d}{:02d}{:02d}{:02d}.txt'.format(tdy.year, tdy.month, tdy.day, tdy.hour, tdy.minute, tdy.second)
