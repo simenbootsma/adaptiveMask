@@ -8,11 +8,12 @@ class AdaptiveMask:
     def __init__(self, view_box, **kwargs):
         self.vbox = view_box  # [xmin, xmax, ymin, ymax] in screen coordinates of the field of view of the camera
         self.p0 = 0.2  # factor that controls how dot size depends on distance to ice (aggressiveness)
-        self.p1 = 10  # desired distance to ice in pixels
+        self.p1 = 30  # desired distance to ice in pixels
         self.p2 = 50  # dot size to expand the mask with when ice is not visible
         self.keep_sides = kwargs['keep_sides']  # left, top, right, bottom: which sides to keep white at all times
         self.screen = self.init_screen(kwargs['screen_size'])
         self.cam_crop = kwargs['mask_box']  # [xmin, xmax, ymin, ymax] in screen coordinates of the part of camera image that is on screen
+        print(kwargs['keep_sides'])
 
     def init_screen(self, ssz):
         screen = np.zeros((ssz[0], ssz[1]), dtype=np.uint8)
@@ -30,11 +31,11 @@ class AdaptiveMask:
     def update(self, cam):
         cam = cam[self.cam_crop[2]:self.cam_crop[3], self.cam_crop[0]:self.cam_crop[1]]
         cam = cv.resize(cam, (self.vbox[1]-self.vbox[0], self.vbox[3]-self.vbox[2]))
-        cam = fill_border(cam, 255, n=10, skip=[not bl for bl in self.keep_white])
+        cam = fill_border(cam, 255, n=10, skip=[bl for bl in self.keep_sides])
         
         top_left = np.array([self.vbox[0], self.vbox[2]])
         mask, ice = find_mask_and_ice(cam)
-        mask = fill_border(mask, 1, skip=self.keep_white)
+        mask = fill_border(mask, 1, skip=[not val for val in self.keep_sides])
         ice = fill_border(ice, 0, n=5)
         mask_edges = find_edges(mask)
         ice_edges = find_edges(ice)
@@ -98,13 +99,13 @@ class AdaptiveMask:
         self.screen[:, self.vbox[1]:] = 0
 
         # force pre-set regions to be white
-        if self.keep_white[0]:
+        if not self.keep_sides[0]:
             self.screen[self.vbox[2]:self.vbox[3], :self.vbox[0]] = 255
-        if self.keep_white[1]:
+        if not self.keep_sides[1]:
             self.screen[:self.vbox[2], self.vbox[0]:self.vbox[1]] = 255
-        if self.keep_white[2]:
+        if not self.keep_sides[2]:
             self.screen[self.vbox[2]:self.vbox[3], self.vbox[1]:] = 255
-        if self.keep_white[3]:
+        if not self.keep_sides[3]:
             self.screen[self.vbox[3]:, self.vbox[0]:self.vbox[1]] = 255
 
         # smoothen
