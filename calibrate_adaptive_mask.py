@@ -80,7 +80,7 @@ def check_calibration(screen, cam_img, calib):
                            np.array([view_box[1], view_box[2]])/2, np.array([view_box[1], view_box[3]])/2]
             ind = np.argsort([np.sum([(np.array([x, y] - bc)) ** 2]) for bc in
                               box_corners])  # indices of box corners sorted by distance to clicked point
-            edge_ind = [None, 0, 3, None, 2, 1][
+            edge_ind = [None, 0, 1, None, 2, 3][
                 ind[0] + ind[1]]  # 0 and 3 are impossible, as 3 would be opposing corners
             keep_edge[edge_ind] = not keep_edge[edge_ind]
             draw_edges()

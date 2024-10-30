@@ -10,20 +10,20 @@ class AdaptiveMask:
         self.p0 = 0.2  # factor that controls how dot size depends on distance to ice (aggressiveness)
         self.p1 = 10  # desired distance to ice in pixels
         self.p2 = 50  # dot size to expand the mask with when ice is not visible
-        self.keep_white = [False, False, False, True]  # left, top, right, bottom: which sides to keep white at all times
+        self.keep_sides = kwargs['keep_sides']  # left, top, right, bottom: which sides to keep white at all times
         self.screen = self.init_screen(kwargs['screen_size'])
         self.cam_crop = kwargs['mask_box']  # [xmin, xmax, ymin, ymax] in screen coordinates of the part of camera image that is on screen
 
     def init_screen(self, ssz):
         screen = np.zeros((ssz[0], ssz[1]), dtype=np.uint8)
         screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = 255
-        if self.keep_white[0]:
+        if not self.keep_sides[0]:
             screen[self.vbox[2]:self.vbox[3], :self.vbox[1]] = 255
-        if self.keep_white[1]:
+        if not self.keep_sides[1]:
             screen[:self.vbox[3], self.vbox[0]:self.vbox[1]] = 255
-        if self.keep_white[2]:
+        if not self.keep_sides[2]:
             screen[self.vbox[2]:self.vbox[3], self.vbox[0]:] = 255
-        if self.keep_white[3]:
+        if not self.keep_sides[3]:
             screen[self.vbox[2]:, self.vbox[0]:self.vbox[1]] = 255
         return screen
 
