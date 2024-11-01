@@ -32,7 +32,8 @@ class AdaptiveMask:
         return screen
 
     def update(self, cam):
-        cam = cam[self.cam_crop[2]:self.cam_crop[3], self.cam_crop[0]:self.cam_crop[1]]
+        if self.cam_crop is not None:
+            cam = cam[self.cam_crop[2]:self.cam_crop[3], self.cam_crop[0]:self.cam_crop[1]]
         cam = cv.resize(cam, (self.vbox[1]-self.vbox[0], self.vbox[3]-self.vbox[2]))
         cam = fill_border(cam, 255, n=10, skip=[bl for bl in self.keep_sides])
         
