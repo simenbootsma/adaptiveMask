@@ -11,6 +11,9 @@ class AdaptiveMask:
         self.p1 = 30  # desired distance to ice in pixels
         self.p2 = 50  # dot size to expand the mask with when ice is not visible
         self.keep_sides = kwargs['keep_sides']  # left, top, right, bottom: which sides to keep white at all times
+        temp = self.keep_sides[3]
+        self.keep_sides[3] = self.keep_sides[2]
+        self.keep_sides[2] = temp  # switched 2 and 3, TODO: change this is calibration
         self.screen = self.init_screen(kwargs['screen_size'])
         self.cam_crop = kwargs['mask_box']  # [xmin, xmax, ymin, ymax] in screen coordinates of the part of camera image that is on screen
         print(kwargs['keep_sides'])

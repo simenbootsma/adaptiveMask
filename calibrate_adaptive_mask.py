@@ -13,7 +13,7 @@ mask_points = []
 SAVE_FOLDER = 'temp_files_calibration/'
 cam_settings = Camera.Settings(aperture='2.5', shutter_speed='1/5', iso=160)
 cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.exe'
-cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER)
+cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER, image_type='NEF')
 cam.setup(cam_settings)
 
 
