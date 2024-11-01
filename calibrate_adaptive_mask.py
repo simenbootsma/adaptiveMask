@@ -74,15 +74,13 @@ def calibrate(screen, cam_img, use_mask=False):
 
 
 def check_calibration(screen, cam_img, calib):
-    def draw_circle(event, x, y, flags, param):
+    def on_click(event, x, y, flags, param):
         if event == cv.EVENT_LBUTTONUP:
-            box_corners = [np.array([view_box[0], view_box[2]])/2, np.array([view_box[0], view_box[3]])/2,
-                           np.array([view_box[1], view_box[2]])/2, np.array([view_box[1], view_box[3]])/2]
-            ind = np.argsort([np.sum([(np.array([x, y] - bc)) ** 2]) for bc in
-                              box_corners])  # indices of box corners sorted by distance to clicked point
-            edge_ind = [None, 0, 1, None, 2, 3][
-                ind[0] + ind[1]]  # 0 and 3 are impossible, as 3 would be opposing corners
-            keep_edge[edge_ind] = not keep_edge[edge_ind]
+            xc, yc = (view_box[0] + view_box[1])/2, (view_box[2] + view_box[3])/2
+            edge_centers = [np.array([view_box[0], yc]), np.array([xc, view_box[2]]),
+                            np.array([view_box[1], yc]), np.array([xc, view_box[3]])]  # left, top, right, bottom
+            ind = np.argsort([np.sum([(np.array([x, y] - ec/2)) ** 2]) for ec in edge_centers])[0]  # index of edge closest to clicked point
+            keep_edge[ind] = not keep_edge[ind]  # toggle edge
             draw_edges()
 
     def draw_edges():
@@ -111,17 +109,17 @@ def check_calibration(screen, cam_img, calib):
     if (view_box[0] < 0) or (view_box[1] >= screen.shape[1]) or (view_box[2] < 0) or (view_box[3] >= screen.shape[0]):
         raise ValueError("View box lies outside of screen, use mask on camera image using the 'mask' flag")
 
-    keep_edge = [True, True, True, True]
+    keep_edge = [True, True, True, True]  # will be changed by on_click()
     screen[view_box[2]:view_box[3], view_box[0]:view_box[1]] = resized_cam
     img = cv.resize(screen, (screen.shape[1] // 2, screen.shape[0] // 2))
-    # cv.imshow("Image", img)
+
     cv.namedWindow("Image", cv.WINDOW_NORMAL)
-    cv.setMouseCallback('Image', draw_circle)
+    cv.setMouseCallback('Image', on_click)
     draw_edges()
     while True:
         cv.imshow("Image", img)
         key = cv.waitKey(10)
-        if key == 13 or key == 27 or key == 32:  # enter or escape or space
+        if key == 13 or key == 27 or key == 32:  # press enter/escape/space to quit
             break
     cv.destroyWindow("Image")
     return keep_edge
