@@ -1,7 +1,5 @@
 import numpy as np
 import cv2 as cv
-import matplotlib.pyplot as plt
-from math import factorial
 
 
 class AdaptiveMask:
@@ -31,8 +29,8 @@ class AdaptiveMask:
         if self.cam_crop is not None:
             cam = cam[self.cam_crop[2]:self.cam_crop[3], self.cam_crop[0]:self.cam_crop[1]]
         cam = cv.resize(cam, (self.vbox[1]-self.vbox[0], self.vbox[3]-self.vbox[2]))
-        cam = fill_border(cam, 255, n=10, skip=[bl for bl in self.keep_sides])
-        
+        cam = fill_border(cam, 255, n=10, skip=self.keep_sides)
+
         top_left = np.array([self.vbox[0], self.vbox[2]])
         mask, ice = find_mask_and_ice(cam)
         mask = fill_border(mask, 1, skip=[not val for val in self.keep_sides])
@@ -45,19 +43,19 @@ class AdaptiveMask:
         mask_edges = mask_edges[(mask_edges[:, 0] % mask.shape[1]-1) != 0]
         mask_edges = mask_edges[(mask_edges[:, 1] % mask.shape[0]-1) != 0]
 
-        # ice_edges += top_left
+        # # ice_edges += top_left
         # plt.plot(ice_edges[:, 0], ice_edges[:, 1])
-
-        #plt.figure()
-        #mat = np.zeros(cam.shape[:2])
-        #mat += mask
-        #mat += 2 * ice
-        #plt.imshow(mat)
-        #if mask_edges is not None:
+        #
+        # plt.figure()
+        # mat = np.zeros(cam.shape[:2])
+        # mat += mask
+        # mat += 2 * ice
+        # plt.imshow(mat)
+        # if mask_edges is not None:
         #    plt.plot(mask_edges[:, 0], mask_edges[:, 1], '.b')
-        #if ice_edges is not None:
+        # if ice_edges is not None:
         #    plt.plot(ice_edges[:, 0], ice_edges[:, 1], '-r')
-     
+        #
 
         if ice_edges is None:
             # expand mask on all edge points
@@ -90,7 +88,7 @@ class AdaptiveMask:
             target_points = np.array(target_points)
             #plt.plot(target_points[:, 0], target_points[:, 1], '.g')
             print("Min error: {:.0f} px  | Max error: {:.0f}  |  Mean error: {:.0f} pixels  |  Median error: {:.0f}".format(np.sqrt(np.min(errors)), np.sqrt(np.max(errors)), np.sqrt(np.mean(errors)), np.sqrt(np.median(errors))))
-        #plt.show()
+        # plt.show()
 
         # force any regions outside of camera view box to be black
         self.screen[:self.vbox[2], :] = 0
@@ -121,14 +119,12 @@ def find_mask_and_ice(img):
 
     s0, s1 = otsu.shape
     mask = np.zeros(otsu.shape)
-    # edges = [(i, j) for i in range(s0) for j in range(s1) if (i%(s0-1))*(j%(s1-1)) == 0]
-    corners = [(0, 0), (s0-1, 0), (0, s1-1), (s0-1, s1-1)]
-    for i, j in corners:
+    edge_centers = [(0, s1//2), (s0//2, 0), (s0-1, s1//2), (s0//2, s1-1)]  # left, top, right, bottom
+    for i, j in edge_centers:
         if mask[i, j] == 0 and otsu[i, j] == 0:
             empty_mat = np.zeros((s0 + 2, s1 + 2), dtype=np.uint8)
             _, _, m, _ = cv.floodFill(otsu.copy(), empty_mat, (j, i), 0)
             mask[m[1:-1, 1:-1] == 1] = 1
-    # mask = cv.dilate(mask, kernel=np.ones((31, 31)))
     ice = (1 - otsu.copy()/255)
     ice[mask==1] = 0
     return mask, ice
