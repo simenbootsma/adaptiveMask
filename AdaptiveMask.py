@@ -61,16 +61,17 @@ class AdaptiveMask:
             # expand mask on all edge points
             for j, i in screen_edges:
                 dsz = self.p2
-                self.screen[i-dsz:i+dsz, j-dsz:j+dsz] = 255
+                slc1, slc2 = slice(max(i - dsz, 0), min(i + dsz, self.screen.shape[0])), slice(max(j - dsz, 0), min(j + dsz, self.screen.shape[1]))
+                self.screen[slc1, slc2] = 255
         else:
-            #plt.figure()
-            #plt.imshow(cam)
-            #plt.figure()
-            #plt.imshow(mask)
-            #plt.figure()
-            #plt.imshow(ice)
-            #plt.plot(ice_edges[:, 0], ice_edges[:, 1])
-            #plt.show()
+            # plt.figure()
+            # plt.imshow(cam)
+            # plt.figure()
+            # plt.imshow(mask)
+            # plt.figure()
+            # plt.imshow(ice)
+            # plt.plot(ice_edges[:, 0], ice_edges[:, 1])
+            # plt.show()
             ice_edges += top_left
             mask_edges += top_left
 
@@ -80,11 +81,12 @@ class AdaptiveMask:
                 cm = mask_edges[np.argmin(np.sum((np.array([j, i]) - mask_edges)**2, axis=1))]  # closest point on mask
                 di = np.min(np.sqrt(np.sum((cm - ice_edges)**2, axis=1))) - self.p1  # distance to ice
                 dsz = int(abs(self.p0 * di))
-                self.screen[i-dsz:i+dsz, j-dsz:j+dsz] = 0 if di > 0 else 255
+                slc1, slc2 = slice(max(i-dsz, 0), min(i+dsz, self.screen.shape[0])), slice(max(j-dsz, 0), min(j+dsz, self.screen.shape[1]))
+                self.screen[slc1, slc2] = 0 if di > 0 else 255
+                errors.append(di**2)
 
                 ii = np.argmin(np.sqrt(np.sum((cm - ice_edges)**2, axis=1)))
                 target_points.append(cm + (ice_edges[ii] - cm) * dsz/di - top_left)
-                errors.append(di**2)
             target_points = np.array(target_points)
             #plt.plot(target_points[:, 0], target_points[:, 1], '.g')
             print("Min error: {:.0f} px  | Max error: {:.0f}  |  Mean error: {:.0f} pixels  |  Median error: {:.0f}".format(np.sqrt(np.min(errors)), np.sqrt(np.max(errors)), np.sqrt(np.mean(errors)), np.sqrt(np.median(errors))))
