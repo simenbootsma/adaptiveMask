@@ -202,7 +202,7 @@ class Camera:
             self.iso: Optional[str] = iso
 
         def __dict__(self) -> Dict[str, Union[None, str, int]]:
-            return {'aperature': self.aperture,
+            return {'aperture': self.aperture,
                     'ec': self.exposure_control,
                     'shutter': self.shutter_speed,
                     'iso': self.iso}
