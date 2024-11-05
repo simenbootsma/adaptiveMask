@@ -87,8 +87,7 @@ def check_calibration(screen, cam_img, calib):
         # Redraw edges
         box_corners = [[view_box[0]//2, view_box[2]//2], [view_box[0]//2, view_box[3]//2],
                        [view_box[1]//2, view_box[2]//2], [view_box[1]//2, view_box[3]//2]]
-        bc_ind = [[0, 1], [0, 2], [1, 3],
-                  [2, 3]]  # indices of box corners corresponding to edges: left, top, bottom, right
+        bc_ind = [[0, 1], [0, 2], [2, 3], [1, 3]]  # indices of box corners corresponding to edges: left, top, right, bottom
         for i in range(4):
             color = (0, 255, 0) if keep_edge[i] else (0, 0, 255)
             p1, p2 = box_corners[bc_ind[i][0]], box_corners[bc_ind[i][1]]
