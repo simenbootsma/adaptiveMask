@@ -15,13 +15,13 @@ def main():
 
 
 def run_test(num):
-    screen_res = (1920, 1080)
     calib_box = [500, 1400, 300, 840]  # (test cases 1,2,3) part of the screen that is seen by camera, from calibration [xmin, xmax, ymin, ymax]
     # calib_box = [500, 860, 180, 1080]  # (test cases 4,5,6)
     s0, s1 = slice(calib_box[0], calib_box[1]), slice(calib_box[2], calib_box[3])
 
     tdata = np.load('test_data/test_data{:d}.npy'.format(num))
-    mask = AdaptiveMask(1000, calib_box)
+    cal = {'screen_size': [1080, 1920], 'keep_sides': [True, True, True, True], 'mask_box': None}
+    mask = AdaptiveMask(calib_box, **cal)
 
     # plt.ion()
     fig, axes = plt.subplots(2, 1)
@@ -47,7 +47,8 @@ def run_test(num):
         axes[1].invert_yaxis()
         axes[1].tick_params(labelleft=False, left=False, labelbottom=False, bottom=False)
 
-        mask.update(cam)
+        rgb_cam = np.stack((cam, cam, cam), axis=-1)
+        mask.update(rgb_cam)
 
         # curve = mask.curve()
         # ax.plot(curve[:, 0], curve[:, 1], '-r')
