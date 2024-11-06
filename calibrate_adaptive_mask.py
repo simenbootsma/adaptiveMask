@@ -39,6 +39,18 @@ def main(args):
     # show result
     keep_sides = check_calibration(screen, cam_img, calib)
 
+    # perform dotted screen calibration
+    screen = screen_for_dot_calibration(calib)
+
+    q = Queue()
+    p0 = Process(target=show_screen, args=(screen, q))
+    p1 = Process(target=take_photo, args=(q, ))
+    p0.start()
+    p1.start()
+    p0.join()
+    q.get()
+    p1.join()
+
     # save result
     save_calibration(screen.shape, calib, keep_sides)
 
@@ -122,6 +134,26 @@ def check_calibration(screen, cam_img, calib):
             break
     cv.destroyWindow("Image")
     return keep_edge
+
+
+def screen_for_dot_calibration(calib):
+    screen = 255 * np.ones(calib['screen_size'])
+    vx0, vx1, vy0, vy1 = calib['view_box']
+    center, width, height = [(vx0 + vx1) // 2, (vy0 + vy1) // 2], vx1 - vx0, vy1 - vy0
+    dot_radius = min(width, height) // 100
+    dot_dist = min(width, height) // 10
+    cv.rectangle(screen, [center[0] - dot_radius, center[1] - dot_radius],
+                 [center[0] + dot_radius, center[1] + dot_radius], (0, 0, 0), -1)
+
+    style = {'radius': dot_radius, 'color': (0, 0, 0), 'thickness': -1}
+    for i in range(0, width // 2 // dot_dist + 1):
+        for j in range(0, height // 2 // dot_dist + 1):
+            cv.circle(screen, [center[0] + i * dot_dist, center[1] + j * dot_dist], **style)
+            cv.circle(screen, [center[0] - i * dot_dist, center[1] + j * dot_dist], **style)
+            cv.circle(screen, [center[0] + i * dot_dist, center[1] - j * dot_dist], **style)
+            cv.circle(screen, [center[0] - i * dot_dist, center[1] - j * dot_dist], **style)
+    # cv.rectangle(screen, [vx0, vy0], [vx1, vy1], (0, 0, 255), 2)
+    return screen
 
 
 def show_screen(screen, queue):
