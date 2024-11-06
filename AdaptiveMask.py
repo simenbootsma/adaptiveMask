@@ -5,12 +5,14 @@ import cv2 as cv
 class AdaptiveMask:
     def __init__(self, view_box, **kwargs):
         self.vbox = view_box  # [xmin, xmax, ymin, ymax] in screen coordinates of the field of view of the camera
-        self.p0 = 0.2  # factor that controls how dot size depends on distance to ice (aggressiveness)
+        self.p0 = 3  # coarsening factor (works best if it is a divisor of p1)
         self.p1 = 30  # desired distance to ice in pixels
         self.p2 = 50  # dot size to expand the mask with when ice is not visible
         self.keep_sides = kwargs['keep_sides']  # left, top, right, bottom: which sides to keep white at all times
         self.screen = self.init_screen(kwargs['screen_size'])
         self.cam_crop = kwargs['mask_box']  # [xmin, xmax, ymin, ymax] in screen coordinates of the part of camera image that is on screen
+        self.ice = None  # placeholder for binarised location of ice
+        self.fail_count = 0
 
     def init_screen(self, ssz):
         screen = np.zeros((ssz[0], ssz[1]), dtype=np.uint8)
@@ -31,86 +33,29 @@ class AdaptiveMask:
         cam = cv.resize(cam, (self.vbox[1]-self.vbox[0], self.vbox[3]-self.vbox[2]))
         cam = fill_border(cam, 255, n=10, skip=self.keep_sides)
 
-        top_left = np.array([self.vbox[0], self.vbox[2]])
-        mask, ice = find_mask_and_ice(cam)
-        mask = fill_border(mask, 1, skip=[not val for val in self.keep_sides])
-        ice = fill_border(ice, 0, n=5)
-        mask_edges = find_edges(mask)
-        ice_edges = find_edges(ice)
-        screen_edges = find_edges(self.screen)
+        _, ice = find_mask_and_ice(cam)
+        cfac = int(self.p1/self.p0)  # coarsening factor: relative size of the coarse image pixels
 
-        # Remove box edges
-        mask_edges = mask_edges[(mask_edges[:, 0] % mask.shape[1]-1) != 0]
-        mask_edges = mask_edges[(mask_edges[:, 1] % mask.shape[0]-1) != 0]
-
-        # # ice_edges += top_left
-        # plt.plot(ice_edges[:, 0], ice_edges[:, 1])
-        #
-        # plt.figure()
-        # mat = np.zeros(cam.shape[:2])
-        # mat += mask
-        # mat += 2 * ice
-        # plt.imshow(mat)
-        # if mask_edges is not None:
-        #    plt.plot(mask_edges[:, 0], mask_edges[:, 1], '.b')
-        # if ice_edges is not None:
-        #    plt.plot(ice_edges[:, 0], ice_edges[:, 1], '-r')
-        #
-
-        if ice_edges is None:
-            # expand mask on all edge points
-            for j, i in screen_edges:
-                dsz = self.p2
-                slc1, slc2 = slice(max(i - dsz, 0), min(i + dsz, self.screen.shape[0])), slice(max(j - dsz, 0), min(j + dsz, self.screen.shape[1]))
-                self.screen[slc1, slc2] = 255
+        if self.ice is not None and np.sum(ice > 0) < 0.5 * np.sum(self.ice > 0):
+            print("[AdaptiveMask.update] Ice not detected! Dilating previous ice twice as much instead.")
+            self.fail_count += 1
+            ice = self.ice
+            cfac *= self.fail_count * 2
         else:
-            # plt.figure()
-            # plt.imshow(cam)
-            # plt.figure()
-            # plt.imshow(mask)
-            # plt.figure()
-            # plt.imshow(ice)
-            # plt.plot(ice_edges[:, 0], ice_edges[:, 1])
-            # plt.show()
-            ice_edges += top_left
-            mask_edges += top_left
+            self.fail_count = 0
+            self.ice = ice
 
-            target_points = []
-            errors = []
-            for j, i in screen_edges:
-                cm = mask_edges[np.argmin(np.sum((np.array([j, i]) - mask_edges)**2, axis=1))]  # closest point on mask
-                di = np.min(np.sqrt(np.sum((cm - ice_edges)**2, axis=1))) - self.p1  # distance to ice
-                dsz = int(abs(self.p0 * di))
-                slc1, slc2 = slice(max(i-dsz, 0), min(i+dsz, self.screen.shape[0])), slice(max(j-dsz, 0), min(j+dsz, self.screen.shape[1]))
-                self.screen[slc1, slc2] = 0 if di > 0 else 255
-                errors.append(di**2)
+        coarse_ice = np.zeros((ice.shape[0]//cfac, ice.shape[1]//cfac))
+        for i in range(coarse_ice.shape[0]):
+            for j in range(coarse_ice.shape[1]):
+                coarse_ice[i, j] = 255 if np.any(ice[i*cfac:(i+1)*cfac, j*cfac:(j+1)*cfac]) else 0
 
-                ii = np.argmin(np.sqrt(np.sum((cm - ice_edges)**2, axis=1)))
-                target_points.append(cm + (ice_edges[ii] - cm) * dsz/di - top_left)
-            target_points = np.array(target_points)
-            #plt.plot(target_points[:, 0], target_points[:, 1], '.g')
-            print("Min error: {:.0f} px  | Max error: {:.0f}  |  Mean error: {:.0f} pixels  |  Median error: {:.0f}".format(np.sqrt(np.min(errors)), np.sqrt(np.max(errors)), np.sqrt(np.mean(errors)), np.sqrt(np.median(errors))))
-        # plt.show()
-
-        # force any regions outside of camera view box to be black
-        self.screen[:self.vbox[2], :] = 0
-        self.screen[self.vbox[3]:, :] = 0
-        self.screen[:, :self.vbox[0]] = 0
-        self.screen[:, self.vbox[1]:] = 0
-
-        # force pre-set regions to be white
-        if not self.keep_sides[0]:
-            self.screen[self.vbox[2]:self.vbox[3], :self.vbox[0]] = 255
-        if not self.keep_sides[1]:
-            self.screen[:self.vbox[2], self.vbox[0]:self.vbox[1]] = 255
-        if not self.keep_sides[2]:
-            self.screen[self.vbox[2]:self.vbox[3], self.vbox[1]:] = 255
-        if not self.keep_sides[3]:
-            self.screen[self.vbox[3]:, self.vbox[0]:self.vbox[1]] = 255
-
-        # smoothen
-        self.screen = cv.blur(self.screen, (self.p1//2, self.p1//2))
-        _, self.screen = cv.threshold(self.screen, 127, 255, cv.THRESH_BINARY)
+        coarse_mask = cv.dilate(coarse_ice, kernel=np.ones((3, 3)), iterations=self.p0)
+        mask = np.zeros(ice.shape)
+        for i in range(coarse_ice.shape[0]):
+            for j in range(coarse_ice.shape[1]):
+                mask[i*cfac:(i+1)*cfac, j*cfac:(j+1)*cfac] = coarse_mask[i, j]
+        self.screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = mask  # TODO: apply conversion map here
 
 
 def find_mask_and_ice(img):
