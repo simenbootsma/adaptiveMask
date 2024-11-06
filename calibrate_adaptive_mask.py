@@ -40,7 +40,7 @@ def main(args):
     keep_sides = check_calibration(screen, cam_img, calib)
 
     # perform dotted screen calibration
-    screen = screen_for_dot_calibration(calib)
+    screen = screen_for_dot_calibration({'screen_size': screen.shape, 'view_box': calib[0]})
 
     q = Queue()
     p0 = Process(target=show_screen, args=(screen, q))
@@ -64,7 +64,7 @@ def calibrate(screen, cam_img, use_mask=False):
     result = None
     pad_screen = np.random.randint(0, 255, (screen.shape[0]*2, screen.shape[1]*2, screen.shape[2]), dtype=np.uint8)
     pad_screen[screen.shape[0]//2:3*screen.shape[0]//2, screen.shape[1]//2:3*screen.shape[1]//2] = screen
-    for scale in np.linspace(.02, 1.0, 40):
+    for scale in np.linspace(.2, 1.0, 40):
         resized = cv.resize(cam_img, (int(cam_img.shape[1] * scale), int(cam_img.shape[0] * scale)))
 
         if pad_screen.shape[0] < resized.shape[0] or pad_screen.shape[1] < resized.shape[1]:
