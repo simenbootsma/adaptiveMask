@@ -81,6 +81,7 @@ def calibrate(screen, cam_img, use_mask=False):
         if result is None or max_val > result[0]:
             result = (max_val, max_loc, scale)
 
+    print("Calibration done! Optimal scale is {:.3f}".format(result[2]))
     (startX, startY) = result[1]
     (endX, endY) = (int(startX + cam_img.shape[1] * result[2]), int(startY + cam_img.shape[0] * result[2]))
     calib = [startX - screen.shape[1] // 2, endX - screen.shape[1] // 2, startY - screen.shape[0] // 2,
@@ -170,7 +171,7 @@ def dot_calibration(cam_img, calib):
     screen_dots = dots_for_dot_calibration(calib)
     cam_dots = get_dot_locations(cam_img)
 
-    assert len(cam_dots) == len(screen_dots), "Not all dots are visible on camera image!"
+    assert len(cam_dots) == len(screen_dots), "Not all dots are visible on camera image! {:d} on screen, but {:d} on cam".format(len(screen_dots), len(cam_dots))
 
     def transform(x, cd):
         s1, s2, theta = x
