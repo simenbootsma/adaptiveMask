@@ -146,7 +146,7 @@ def dots_for_dot_calibration(calib):
     dot_dist = min(width, height) // 10  # distance between dots in pixels
     dotx = np.arange(-width//(2*dot_dist)+1, width//(2*dot_dist)+1) * dot_dist
     doty = np.arange(-height//(2*dot_dist)+1, height//(2*dot_dist)+1) * dot_dist
-    return np.array([[y, x] for x in dotx for y in doty if not (x == y == 0)], dtype=np.int32)
+    return np.array([[x, y] for x in dotx for y in doty if not (x == y == 0)], dtype=np.int32)
 
 
 def screen_for_dot_calibration(calib):
