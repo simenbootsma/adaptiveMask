@@ -43,7 +43,7 @@ def main(args):
     save_calibration(screen.shape, calib, keep_sides)
 
 
-def calibrate(screen, cam_img, use_mask=False):
+def calibrate_old(screen, cam_img, use_mask=False):
     # assumption: cam image is larger than the same part displayed on screen
     if use_mask:
         mask0, mask1 = set_rect_mask(cam_img)
@@ -71,6 +71,78 @@ def calibrate(screen, cam_img, use_mask=False):
              endY - screen.shape[0] // 2]
     mask_box = [0, cam_img.shape[1], 0, cam_img.shape[0]] if not use_mask else [mask0[0], mask1[0], mask0[1], mask1[1]]
     return calib, mask_box
+
+
+def calibrate(screen, cam_img, use_mask=False):
+    # assumption: cam image is larger than the same part displayed on screen
+    if use_mask:
+        mask0, mask1 = set_rect_mask(cam_img)
+        cam_img = cam_img[mask0[1]:mask1[1], mask0[0]:mask1[0]]
+
+    max_scale = min(screen.shape[0]/cam_img.shape[0], screen.shape[1]/cam_img.shape[1])
+    min_scale = max_scale / 10
+    scale_step = 0.05
+
+    # First run: large steps
+    scales1 = np.arange(min_scale, max_scale, scale_step)
+    values1 = np.zeros(scales1.size)
+    for i in range(scales1.size):
+        resized = cv.resize(cam_img, (int(cam_img.shape[1] * scales1[i]), int(cam_img.shape[0] * scales1[i])))
+        conv = cv.matchTemplate(screen, resized, cv.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv.minMaxLoc(conv)  # min_val, max_val, min_loc, max_loc
+        values1[i] = max_val
+
+    # Second run: refined steps
+    opt_sc = scales1[np.argmax(values1)]
+    scales2 = opt_sc + np.array([-1, -2/5, -1/5, 0, 1/5, 2/5, 1]) * scale_step
+    values2 = np.nan * np.zeros(scales2.size)
+    values2[0], values2[-1] = values1[np.argmax(values1)-1], values1[np.argmax(values1)+1]
+    values2[scales2==0] = values1[np.argmax(values1)]
+    for i in range(scales2.size):
+        if np.isnan(values2[i]):
+            resized = cv.resize(cam_img, (int(cam_img.shape[1] * scales2[i]), int(cam_img.shape[0] * scales2[i])))
+            conv = cv.matchTemplate(screen, resized, cv.TM_CCOEFF_NORMED)
+            _, max_val, _, _ = cv.minMaxLoc(conv)  # min_val, max_val, min_loc, max_loc
+            values2[i] = max_val
+
+    # Final run: find optimum
+    opt_i = np.argmax(values2)
+    assert 0 < opt_i < values2.size-1, "Peak on one of the sides"
+    opt_sc, opt_val = parabolic_fit(scales2[opt_i-1:opt_i+2], values2[opt_i-1:opt_i+2])
+    resized = cv.resize(cam_img, (int(cam_img.shape[1] * opt_sc), int(cam_img.shape[0] * opt_sc)))
+    conv = cv.matchTemplate(screen, resized, cv.TM_CCOEFF_NORMED)
+    _, _, _, opt_loc = cv.minMaxLoc(conv)  # min_val, max_val, min_loc, max_loc
+
+    # plt.figure()
+    # plt.plot(scales1, values1, '-o', markersize=2)
+    # plt.plot(scales2, values2, '-o', markersize=2)
+    # plt.plot(opt_sc, opt_val, '^g')
+    #
+    # plt.figure()
+    # plt.imshow(resized)
+    # plt.figure()
+    # plt.imshow(screen)
+    # plt.plot(opt_loc[0], opt_loc[1], 'or')
+    # plt.show()
+
+    (startX, startY) = opt_loc
+    (endX, endY) = (int(startX + cam_img.shape[1] * opt_sc), int(startY + cam_img.shape[0] * opt_sc))
+    calib = [startX, endX, startY, endY]
+    mask_box = [0, cam_img.shape[1], 0, cam_img.shape[0]] if not use_mask else [mask0[0], mask1[0], mask0[1], mask1[1]]
+    return calib, mask_box
+
+
+def parabolic_fit(x, y):
+    x1, x2, x3 = x
+    y1, y2, y3 = y
+    denom = (x1 - x2) * (x1 - x3) * (x2 - x3)
+    A = (x3 * (y2 - y1) + x2 * (y1 - y3) + x1 * (y3 - y2)) / denom
+    B = (x3*x3 * (y1 - y2) + x2*x2 * (y3 - y1) + x1*x1 * (y2 - y3)) / denom
+    C = (x2 * x3 * (x2 - x3) * y1 + x3 * x1 * (x3 - x1) * y2 + x1 * x2 * (x1 - x2) * y3) / denom
+
+    xv = -B / (2*A)
+    yv = C - B**2 / (4*A)
+    return xv, yv
 
 
 def check_calibration(screen, cam_img, calib):
