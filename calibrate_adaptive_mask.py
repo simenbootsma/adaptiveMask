@@ -68,7 +68,7 @@ def calibrate(screen, cam_img, use_mask=False):
     result = None
     pad_screen = np.random.randint(0, 255, (screen.shape[0]*2, screen.shape[1]*2, screen.shape[2]), dtype=np.uint8)
     pad_screen[screen.shape[0]//2:3*screen.shape[0]//2, screen.shape[1]//2:3*screen.shape[1]//2] = screen
-    for scale in np.linspace(.2, 1.0, 40):
+    for scale in np.linspace(.1, .23, 40):
         resized = cv.resize(cam_img, (int(cam_img.shape[1] * scale), int(cam_img.shape[0] * scale)))
 
         if pad_screen.shape[0] < resized.shape[0] or pad_screen.shape[1] < resized.shape[1]:
@@ -144,6 +144,7 @@ def check_calibration(screen, cam_img, calib):
 def dots_for_dot_calibration(calib):
     vx0, vx1, vy0, vy1 = calib['view_box']
     width, height = vx1 - vx0, vy1 - vy0
+    width, height = int(.9*width), int(.9*height)
     dot_dist = min(width, height) // 10  # distance between dots in pixels
     dotx = np.arange(-width//(2*dot_dist)+1, width//(2*dot_dist)+1) * dot_dist
     doty = np.arange(-height//(2*dot_dist)+1, height//(2*dot_dist)+1) * dot_dist
@@ -154,6 +155,7 @@ def screen_for_dot_calibration(calib):
     screen = 255 * np.ones(calib['screen_size'])
     vx0, vx1, vy0, vy1 = calib['view_box']
     center, width, height = [(vx0 + vx1) // 2, (vy0 + vy1) // 2], vx1 - vx0, vy1 - vy0
+    width, height = int(.9*width), int(.9*height)
     dr = min(width, height) // 100  # dot radius
     pnts = np.array([
         [center[0] - dr, center[1] - dr], [center[0] + dr, center[1] - dr], [center[0] + 3*dr, center[1]],
