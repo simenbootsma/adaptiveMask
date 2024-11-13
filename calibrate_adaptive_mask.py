@@ -140,12 +140,17 @@ def screen_for_dot_calibration(calib):
     screen = 255 * np.ones(calib['screen_size'])
     vx0, vx1, vy0, vy1 = calib['view_box']
     center, width, height = [(vx0 + vx1) // 2, (vy0 + vy1) // 2], vx1 - vx0, vy1 - vy0
-    dot_radius = min(width, height) // 100
+    dr = min(width, height) // 100  # dot radius
     dot_dist = min(width, height) // 10
-    cv.rectangle(screen, [center[0] - dot_radius, center[1] - dot_radius],
-                 [center[0] + dot_radius, center[1] + dot_radius], (0, 0, 0), -1)
+    pnts = np.array([
+        [center[0] - dr, center[1] - dr], [center[0] + dr, center[1] - dr], [center[0] + 3*dr, center[1]],
+        [center[0]+dr, center[1]+dr], [center[0], center[1] + 3 * dr], [center[0]-dr, center[1]+dr]
+    ], dtype=np.int32)  # corner points of rectangle with triangles on bottom and right side, clockwise starting from top left
+    # cv.rectangle(screen, [center[0] - dot_radius, center[1] - dot_radius],
+    #              [center[0] + dot_radius, center[1] + dot_radius], (0, 0, 0), -1)
+    cv.fillPoly(screen, [pnts],  (0, 0, 0))
 
-    style = {'radius': dot_radius, 'color': (0, 0, 0), 'thickness': -1}
+    style = {'radius': dr, 'color': (0, 0, 0), 'thickness': -1}
     for i in range(0, width // 2 // dot_dist + 1):
         for j in range(0, height // 2 // dot_dist + 1):
             cv.circle(screen, [center[0] + i * dot_dist, center[1] + j * dot_dist], **style)
