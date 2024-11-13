@@ -11,6 +11,7 @@ class AdaptiveMask:
         self.keep_sides = kwargs['keep_sides']  # left, top, right, bottom: which sides to keep white at all times
         self.screen = self.init_screen(kwargs['screen_size'])
         self.cam_crop = kwargs['mask_box']  # [xmin, xmax, ymin, ymax] in screen coordinates of the part of camera image that is on screen
+        self.transform = kwargs['transform']
         self.ice = None  # placeholder for binarised location of ice
         self.fail_count = 0
 
@@ -55,7 +56,15 @@ class AdaptiveMask:
         for i in range(coarse_ice.shape[0]):
             for j in range(coarse_ice.shape[1]):
                 mask[i*cfac:(i+1)*cfac, j*cfac:(j+1)*cfac] = coarse_mask[i, j]
-        self.screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = mask  # TODO: apply conversion map here
+
+        conv_mask = np.zeros(mask.shape)
+        for i in range(mask.shape[0]):
+            for j in range(mask.shape[1]):
+                ii, jj = self.transform.dot(np.array([[i], [j]])).astype(np.int32)
+                if (0 <= ii < conv_mask.shape[0]) and (0 <= jj < conv_mask.shape[1]):
+                    conv_mask[ii, jj] = mask[i, j]
+
+        self.screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = conv_mask
 
 
 def find_mask_and_ice(img):
