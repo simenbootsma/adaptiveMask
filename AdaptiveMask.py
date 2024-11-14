@@ -46,10 +46,15 @@ class AdaptiveMask:
             self.fail_count = 0
             self.ice = ice
 
+        rows, cols = self.ice.shape
+        M = np.zeros((2, 3))
+        M[:2, :2] = self.transform
+        tr_ice = cv.warpAffine(self.ice, M, (cols, rows))  # transformed ice using dot calibration
+
         coarse_ice = np.zeros((ice.shape[0]//cfac, ice.shape[1]//cfac))
         for i in range(coarse_ice.shape[0]):
             for j in range(coarse_ice.shape[1]):
-                coarse_ice[i, j] = 255 if np.any(ice[i*cfac:(i+1)*cfac, j*cfac:(j+1)*cfac]) else 0
+                coarse_ice[i, j] = 255 if np.any(tr_ice[i*cfac:(i+1)*cfac, j*cfac:(j+1)*cfac]) else 0
 
         coarse_mask = cv.dilate(coarse_ice, kernel=np.ones((3, 3)), iterations=self.p0)
         mask = np.zeros(ice.shape)
@@ -57,14 +62,15 @@ class AdaptiveMask:
             for j in range(coarse_ice.shape[1]):
                 mask[i*cfac:(i+1)*cfac, j*cfac:(j+1)*cfac] = coarse_mask[i, j]
 
-        conv_mask = np.zeros(mask.shape)
-        for i in range(mask.shape[0]):
-            for j in range(mask.shape[1]):
-                ii, jj = self.transform.dot(np.array([[i], [j]])).astype(np.int32)
-                if (0 <= ii < conv_mask.shape[0]) and (0 <= jj < conv_mask.shape[1]):
-                    conv_mask[ii, jj] = mask[i, j]
+        # dpx = 5
+        # conv_mask = np.zeros(mask.shape)
+        # for i in range(mask.shape[0]):
+        #     for j in range(mask.shape[1]):
+        #         ii, jj = self.transform.dot(np.array([[i], [j]])).astype(np.int32).T[0]
+        #         if (dpx <= ii < conv_mask.shape[0]-dpx) and (dpx <= jj < conv_mask.shape[1]-dpx):
+        #             conv_mask[ii-dpx:ii+dpx+1, jj-dpx:jj+dpx+1] = mask[i, j]
 
-        self.screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = conv_mask
+        self.screen[self.vbox[2]:self.vbox[3], self.vbox[0]:self.vbox[1]] = mask
 
 
 def find_mask_and_ice(img):
