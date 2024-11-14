@@ -84,7 +84,7 @@ def load_calibration():
             if ' : ' in ln:
                 k, val = ln.split(' : ')
                 data[k] = int(val) if '(' not in val else [int(v) for v in val[1:-1].split(', ')]
-    data['transform'] = np.reshape(data['transform'], (2, 2))
+    data['transform'] = 1e-4 * np.reshape(data['transform'], (2, 2))  # values were multiplied by 10000 to save as int
     return data
 
 

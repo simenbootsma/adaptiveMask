@@ -335,7 +335,7 @@ def save_calibration(screen_size, calib, keep_sides, transform):
     calib += '\ncenter : ({:d}, {:d})'.format(*center)  # center (x, y) of view box on screen
     calib += '\nscreen_size : ({:d}, {:d})'.format(*screen_size)  # dimensions of the screen in pixels
     calib += '\nkeep_sides : ({:d}, {:d}, {:d}, {:d})'.format(*keep_sides)  # which sides to use in the masking 1 = use, 0 = ignore
-    calib += '\ntransform : ({:.3f}, {:.3f}, {:.3f}, {:.3f})'.format(transform[0, 0], transform[0, 1], transform[1, 0], transform[1, 1])  # transformation matrix from camera to screen
+    calib += '\ntransform : ({:.0f}, {:.0f}, {:.0f}, {:.0f})'.format(1e4*transform[0, 0], 1e4*transform[0, 1], 1e4*transform[1, 0], 1e4*transform[1, 1])  # transformation matrix from camera to screen
 
     tdy = datetime.today()
     filename = 'adaptive_mask_calibration_{:04d}{:02d}{:02d}{:02d}{:02d}{:02d}.txt'.format(tdy.year, tdy.month, tdy.day, tdy.hour, tdy.minute, tdy.second)
