@@ -171,6 +171,7 @@ def screen_for_dot_calibration(calib):
 
 def dot_calibration(cam_img, calib):
     screen_dots = dots_for_dot_calibration(calib)
+    screen_dots = np.fliplr(screen_dots)  # x and y are swapped
     cam_dots = get_dot_locations(cam_img)
 
     assert len(cam_dots) == len(screen_dots), "Not all dots are visible on camera image! {:d} on screen, but {:d} on cam".format(len(screen_dots), len(cam_dots))
