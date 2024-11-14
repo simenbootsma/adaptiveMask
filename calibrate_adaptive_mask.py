@@ -41,7 +41,7 @@ def main(args):
     keep_sides = check_calibration(screen, cam_img, calib)
 
     # perform dotted screen calibration
-    cal = {'screen_size': screen.shape, 'view_box': calib[0]}
+    cal = {'screen_size': screen.shape, 'view_box': calib[0], 'mask_box': calib[1]}
     screen = screen_for_dot_calibration(cal)
 
     q = Queue()
@@ -170,6 +170,9 @@ def screen_for_dot_calibration(calib):
 
 
 def dot_calibration(cam_img, calib):
+    mb = calib['mask_box']
+    cam_img = cam_img[mb[2]:mb[3], mb[0]:mb[1]]
+
     screen_dots = dots_for_dot_calibration(calib)
     cam_dots = get_dot_locations(cam_img)
 
