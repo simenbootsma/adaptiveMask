@@ -96,7 +96,10 @@ def calibrate(screen, cam_img, use_mask=False):
     opt_sc = scales1[np.argmax(values1)]
     scales2 = opt_sc + np.array([-1, -2/5, -1/5, 0, 1/5, 2/5, 1]) * scale_step
     values2 = np.nan * np.zeros(scales2.size)
-    values2[0], values2[-1] = values1[np.argmax(values1)-1], values1[np.argmax(values1)+1]
+    if np.argmax(values1) > 0:
+        values2[0] = values1[np.argmax(values1)-1]
+    if np.argmax(values1) < len(values1)-1:
+        values2[-1] = values1[np.argmax(values1)+1]
     values2[scales2==0] = values1[np.argmax(values1)]
     for i in range(scales2.size):
         if np.isnan(values2[i]):
