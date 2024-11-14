@@ -59,7 +59,7 @@ def calibrate_old(screen, cam_img, use_mask=False):
             # cam image is larger than padded screen
             break
 
-        conv = cv.matchTemplate(pad_screen, resized, cv.TM_CCOEFF_NORMED)
+        conv = cv.matchTemplate(pad_screen, resized, cv.TM_CCOEFF)
         _, max_val, _, max_loc = cv.minMaxLoc(conv)  # min_val, max_val, min_loc, max_loc
 
         if result is None or max_val > result[0]:
@@ -88,7 +88,7 @@ def calibrate(screen, cam_img, use_mask=False):
     values1 = np.zeros(scales1.size)
     for i in range(scales1.size):
         resized = cv.resize(cam_img, (int(cam_img.shape[1] * scales1[i]), int(cam_img.shape[0] * scales1[i])))
-        conv = cv.matchTemplate(screen, resized, cv.TM_CCOEFF_NORMED)
+        conv = cv.matchTemplate(screen, resized, cv.TM_CCOEFF)
         _, max_val, _, _ = cv.minMaxLoc(conv)  # min_val, max_val, min_loc, max_loc
         values1[i] = max_val
 
@@ -105,7 +105,7 @@ def calibrate(screen, cam_img, use_mask=False):
     for i in range(scales2.size):
         if np.isnan(values2[i]):
             resized = cv.resize(cam_img, (int(cam_img.shape[1] * scales2[i]), int(cam_img.shape[0] * scales2[i])))
-            conv = cv.matchTemplate(screen, resized, cv.TM_CCOEFF_NORMED)
+            conv = cv.matchTemplate(screen, resized, cv.TM_CCOEFF)
             _, max_val, _, _ = cv.minMaxLoc(conv)  # min_val, max_val, min_loc, max_loc
             values2[i] = max_val
 
