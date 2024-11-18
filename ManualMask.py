@@ -41,10 +41,28 @@ class Cylinder:
         self.random_dot = False
 
     def move_down(self):
-        self.center = min(self.resolution[1 - self.transposed]-self.width//2, self.center + self.sensitivity)
+        if self.transposed:
+            self.move_right()
+        else:
+            self.center = min(self.resolution[1]-self.width//2, self.center + self.sensitivity)
 
     def move_up(self):
-        self.center = max(self.width//2, self.center - self.sensitivity)
+        if self.transposed:
+            self.move_left()
+        else:
+            self.center = max(self.width//2, self.center - self.sensitivity)
+
+    def move_right(self):
+        if not self.transposed:
+            self.move_down()
+        else:
+            self.center = min(self.resolution[0]-self.width//2, self.center + self.sensitivity)
+
+    def move_left(self):
+        if not self.transposed:
+            self.move_up()
+        else:
+            self.center = max(self.width//2, self.center - self.sensitivity)
 
     def increase_width(self):
         self.width = min(self.resolution[1 - self.transposed], int(2*self.height/self.curvature-1), self.width + self.sensitivity)
@@ -103,8 +121,8 @@ class Cylinder:
         self.color = colors[self.color_idx]
 
     def handle_key(self, key):
-        char = chr(key)
-        func_map = {chr(1): self.move_down, chr(0): self.move_up, "w": self.increase_width, "W": self.decrease_width,
+        char = key if type(key) is str else chr(key)
+        func_map = {chr(1): self.move_down, chr(0): self.move_up, chr(2): self.move_left, chr(3): self.move_right, "w": self.increase_width, "W": self.decrease_width,
                     "h": self.increase_height, "H": self.decrease_height, "b": self.increase_blur,
                     "B": self.decrease_blur, "t": self.transpose,
                     "k": self.increase_curvature, "K": self.decrease_curvature, "f": self.flip,
