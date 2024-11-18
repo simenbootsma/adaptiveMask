@@ -1,11 +1,15 @@
 import numpy as np
 import cv2 as cv
-import time
 import os.path
 from ManualMask import Cylinder
+import matplotlib.pyplot as plt
+import matplotlib
+
+matplotlib.use('Qt5Agg')
 
 
-IMG_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'  # folder where camera saves images
+# IMG_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'  # folder where camera saves images
+IMG_FOLDER = 'test_folder/'
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = chr(0), chr(1), chr(2), chr(3)
 
 
@@ -22,23 +26,29 @@ def main():
     while True:
         img_path = IMG_FOLDER + "_{:d}.jpg".format(img_count)
         if auto_enabled and os.path.exists(img_path):
-            img = cv.imread(img_path)
-            img_count += 1
+            # img = cv.imread(img_path)
+            # img_count += 1
+
+            img = fake_img(cyl)
 
             # auto-update screen
             actions = compute_actions(img)
+            print(actions)
             for a in actions:
                 cyl.handle_key(a)
-        else:
-            key = cv.waitKey(10)
-            if key == 27:
-                break
-            elif key == ord('a'):
-                auto_enabled = not auto_enabled
-                print("Auto mode \033[1m{:s}\033[0m.".format("enabled" if auto_enabled else "disabled"))
-            elif key != -1:
-                print(key)
-                cyl.handle_key(key)
+
+            if len(actions) == 0:
+                plt.imshow(img)
+                plt.show()
+        key = cv.waitKey(10)
+        if key == 27:
+            break
+        elif key == ord('a'):
+            auto_enabled = not auto_enabled
+            print("Auto mode \033[1m{:s}\033[0m.".format("enabled" if auto_enabled else "disabled"))
+        elif key != -1:
+            print(key)
+            cyl.handle_key(key)
         cv.imshow("window", cyl.get_img())
     cv.destroyWindow("window")
 
@@ -48,7 +58,7 @@ def compute_actions(img):
     # settings
     lr_thresh = 0.05  # minimum difference in white area between left and right before moving laterally
     w_thresh = 80  # maximum difference in mask and ice width in camera pixels
-    h_thresh = 30  # maximum distance between mask and ice tip in camera pixels
+    h_thresh = 80  # maximum distance between mask and ice tip in camera pixels
     iw_ratio_thresh = 0.1  # maximum difference in ice area to white area between top and bottom half
 
     # setup
@@ -58,7 +68,7 @@ def compute_actions(img):
     mask, ice = find_mask_and_ice(img)
     mask[:10, :] = 1  # add top edge back in mask
     ice_edges = find_edges(ice, largest_only=True)
-    mask_edges = find_edges(mask, largest_only=True)
+    mask_edges = find_edges(mask, remove_outside=True)
 
     if len(ice_edges) == 0:
         print("[compute_actions]: no ice detected")
@@ -70,19 +80,20 @@ def compute_actions(img):
     cx = int(np.mean(ice_edges[:, 0]))
     x_diff = (np.sum(M[:, cx:]) - np.sum(M[:, :cx]))/np.sum(M)  # normalised difference in white area between left and right side of the cylinder
     if abs(x_diff) > lr_thresh:
-        actions.append(ARROW_LEFT if x_diff < 0 else ARROW_RIGHT)
+        actions.append(ARROW_LEFT if x_diff > 0 else ARROW_RIGHT)
 
     # Adjust width
     min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
     sorted_ice_edges_x = np.sort(ice_edges[:, 0])
     max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
-    max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 1])
+    max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
     width_diff = max_width_mask - max_width
+    print(width_diff)
     if abs(width_diff) > w_thresh:
         actions.append("W" if width_diff > 0 else "w")
 
     # Adjust height
-    tip_y = np.mean(np.sort(ice_edges[:, 1])[max_ind:])
+    tip_y = int(np.mean(np.sort(ice_edges[:, 1])[max_ind:]))
     mask_tip_y = np.max(mask_edges[:, 1])
     height_diff = mask_tip_y - tip_y
     if abs(height_diff) > h_thresh:
@@ -91,9 +102,9 @@ def compute_actions(img):
     # Adjust curvature
     cy = int(np.mean(ice_edges[:, 1]))
     iw_ratio_top = np.sum(ice[:cy, :]) / np.sum(M[:cy, :])  # ice area to white area ratio of top half
-    iw_ratio_bot = np.sum(ice[cy:, :]) / np.sum(M[cy:, :])  # ice area to white area ratio of bottom half
+    iw_ratio_bot = np.sum(ice[cy:tip_y, :]) / np.sum(M[cy:tip_y, :])  # ice area to white area ratio of bottom half
     iw_ratio_diff = iw_ratio_top - iw_ratio_bot
-    if abs(iw_ratio_diff) > iw_ratio_thresh:
+    if abs(iw_ratio_diff) > iw_ratio_thresh and ("h" not in actions and "H" not in actions):
         actions.append("k" if iw_ratio_diff > 0 else "K")
     return actions
 
@@ -115,7 +126,7 @@ def find_mask_and_ice(img):
     return mask, ice
 
 
-def find_edges(img, largest_only=False):
+def find_edges(img, largest_only=False, remove_outside=False):
     if largest_only:
         cont, hierarchy = cv.findContours(img.astype(np.uint8), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
         if len(cont) == 0:
@@ -133,6 +144,13 @@ def find_edges(img, largest_only=False):
         edges = np.array([0, 0])
         for c in conts:
             edges = np.vstack((edges, np.reshape(c, (c.shape[0], 2))))
+
+        # remove box edges
+        if remove_outside:
+            edges = edges[edges[:, 0] > 0]
+            edges = edges[edges[:, 0] < img.shape[1]-1]
+            edges = edges[edges[:, 1] > 0]
+            edges = edges[edges[:, 1] < img.shape[0]-1]
         return edges[1:, :]
 
 
@@ -141,6 +159,14 @@ def cv_window():
     # cv.moveWindow("window", 900, 900)
     # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
+
+def fake_img(cyl):
+    arr = np.load('test_data/test_data4.npy')
+    ice = arr[:, :, 0]
+    screen = cv.cvtColor(cyl.get_img(), cv.COLOR_RGB2GRAY)
+    img = cv.resize(screen, (2 * cyl.resolution[0], 2*cyl.resolution[1]))
+    img[:1000, 1800:2200] -= np.flipud(ice)
+    return np.stack((img, img, img), axis=-1)
 
 
 if __name__ == '__main__':

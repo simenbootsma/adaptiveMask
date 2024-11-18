@@ -11,50 +11,22 @@ def main():
     # test_data_from_vc_contours()
     # show_test_data(4)
     # test_data_from_hc_contours()
-    run_test(1)
+    run_test(4)
 
 
 def run_test(num):
-    calib_box = [500, 1400, 300, 840]  # (test cases 1,2,3) part of the screen that is seen by camera, from calibration [xmin, xmax, ymin, ymax]
-    # calib_box = [500, 860, 180, 1080]  # (test cases 4,5,6)
-    s0, s1 = slice(calib_box[0], calib_box[1]), slice(calib_box[2], calib_box[3])
+    arr = np.load('test_data/test_data{:d}.npy'.format(num))
+    test0 = arr[:, :, 0]
 
-    tdata = np.load('test_data/test_data{:d}.npy'.format(num))
-    cal = {'screen_size': [1080, 1920], 'keep_sides': [True, True, True, True], 'mask_box': None}
-    mask = AdaptiveMask(calib_box, **cal)
-
-    # plt.ion()
-    fig, axes = plt.subplots(2, 1)
-    for n in range(tdata.shape[2]):
-        # fig, ax = plt.subplots()
-        screen = mask.screen
-
-        cam = 255 - cv.resize(tdata[:, :, n], (calib_box[1]-calib_box[0], calib_box[3]-calib_box[2]))
-        s = (cv.blur(screen[s1, s0], (21, 21))).astype(np.uint8)
-        cam[cam == 255] = s[cam == 255]
-
-        # screen[s1, s0] = cam
-
-        axes[0].clear()
-        axes[0].imshow(screen, cmap='gray')
-        axes[0].set_title(str(n))
-        axes[0].invert_yaxis()
-        axes[1].tick_params(labelleft=False, left=False, labelbottom=False, bottom=False)
-
-        axes[1].clear()
-        axes[1].imshow(cam, cmap='gray')
-        axes[1].set_title(str(n))
-        axes[1].invert_yaxis()
-        axes[1].tick_params(labelleft=False, left=False, labelbottom=False, bottom=False)
-
-        rgb_cam = np.stack((cam, cam, cam), axis=-1)
-        mask.update(rgb_cam)
-
-        # curve = mask.curve()
-        # ax.plot(curve[:, 0], curve[:, 1], '-r')
-        plt.pause(.1)
-        # plt.show()
-    plt.ioff()
+    img = np.zeros((2000, 4000))
+    img[:1000, 1800:2200] = np.flipud(test0)
+    mask = 255 * np.ones(img.shape)
+    mask[:1000, 1800:2200] = 0
+    mask = cv.blur(mask, (51, 51))
+    M = 255 - (mask + img)
+    rgb = np.stack((M, M, M), axis=-1).astype(np.uint8)
+    plt.imshow(rgb)
+    plt.imsave('test_folder/_0.jpg', rgb)
     plt.show()
 
 
