@@ -1,80 +1,46 @@
 import numpy as np
 import cv2 as cv
-from multiprocessing import Process, Queue
 import time
-from glob import glob
+import os.path
 from ManualMask import Cylinder
-from Camera import Camera
 
 
-SAVE_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'
-cam_settings = Camera.Settings(aperture='2.5', shutter_speed='1/5', iso=160)
-cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.exe'
-cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER)
-cam.setup(cam_settings)
+IMG_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'  # folder where camera saves images
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = chr(0), chr(1), chr(2), chr(3)
 
 
 def main():
-    q = Queue()
-    p0 = Process(target=show_screen_worker, args=(q,))
-    p1 = Process(target=masking_worker, args=(q,))
-
-    p0.start()
-    p1.start()
-    p0.join()
-    repeat = q.get(timeout=10)
-    p1.join(timeout=10)
-    q.close()
-
-    if repeat:
-        print('Repeating')
-        main()
-    print("Exiting...")
-
-
-def show_screen_worker(queue):
-    cv_window()
-    img = np.ones((1920, 1080, 3))
-
-    while True:
-        if not queue.empty():
-            pkg = queue.get()
-            if type(pkg) is np.ndarray:
-                img = pkg
-            else:
-                queue.put(pkg)
-                break
-        cv.imshow("window", img)
-        key = cv.waitKey(100)
-        if key == 27:
-            break
-    cv.destroyWindow("window")
-
-
-def masking_worker(queue):
-    # initialize adaptive mask
+    # initialize
     cyl = Cylinder(resolution=(1920, 1080))
     cyl.sensitivity = 10  # sensitivity in screen pixels
-    queue.put(cyl.get_img())
+    cyl.transpose()
+    cv_window()
 
-    st = time.time()
+    # start program
+    img_count = 0
+    auto_enabled = True
     while True:
-        if queue.empty():
-            img = take_photo()
+        img_path = IMG_FOLDER + "_{:d}.jpg".format(img_count)
+        if auto_enabled and os.path.exists(img_path):
+            img = cv.imread(img_path)
+            img_count += 1
 
-            # update screen
+            # auto-update screen
             actions = compute_actions(img)
             for a in actions:
                 cyl.handle_key(a)
-
-            queue.put(cyl.get_img())
-            st = time.time()
         else:
-            time.sleep(0.1)
-        if time.time() - st > 10:
-            print("[masking_worker] received no image in 10 seconds, quitting...")
-            break  # quit if queue has not been emptied in 10 seconds
+            key = cv.waitKey(10)
+            if key == 27:
+                break
+            elif key == ord('a'):
+                auto_enabled = not auto_enabled
+                print("Auto mode \033[1m{:s}\033[0m.".format("enabled" if auto_enabled else "disabled"))
+            elif key != -1:
+                print(key)
+                cyl.handle_key(key)
+        cv.imshow("window", cyl.get_img())
+    cv.destroyWindow("window")
 
 
 def compute_actions(img):
@@ -175,13 +141,6 @@ def cv_window():
     # cv.moveWindow("window", 900, 900)
     # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
-
-def take_photo():
-    image_name = cam.collection_name + '_' + str(cam.image_index) + cam.image_type
-    cam.capture_single_image(autofocus=False)
-    #image_name = '_1.jpg'
-    photo = cv.imread(SAVE_FOLDER + image_name)
-    return photo
 
 
 if __name__ == '__main__':
