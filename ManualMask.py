@@ -6,7 +6,7 @@ import cv2 as cv
 """
 CONTROLS
 
-    Esc : exit
+    Esc         : exit
     Back        : reset
     f           : flip image
     left arrow  : move left
@@ -32,7 +32,7 @@ class Cylinder:
         self.width = resolution[1] // 3
         self.height = int(resolution[0] * 3 / 4)
         self.blur = 0
-        self.curvature = self.width // 2
+        self.curvature = 1
         self.flipped = False
         self.transposed = False
         self.contrast = 1.0
@@ -41,22 +41,22 @@ class Cylinder:
         self.random_dot = False
 
     def move_down(self):
-        self.center = min(self.resolution[1]-self.width//2, self.center + self.sensitivity)
+        self.center = min(self.resolution[1 - self.transposed]-self.width//2, self.center + self.sensitivity)
 
     def move_up(self):
         self.center = max(self.width//2, self.center - self.sensitivity)
 
     def increase_width(self):
-        self.width = min(self.resolution[1], self.width + self.sensitivity)
+        self.width = min(self.resolution[1 - self.transposed], int(2*self.height/self.curvature-1), self.width + self.sensitivity)
 
     def decrease_width(self):
-        self.width = max(0, self.width - self.sensitivity)
+        self.width = max(2, self.width - self.sensitivity)
 
     def increase_height(self):
-        self.height = min(self.resolution[0], self.height + self.sensitivity)
+        self.height = min(self.resolution[self.transposed], self.height + self.sensitivity)
 
     def decrease_height(self):
-        self.height = max(self.curvature, self.height - self.sensitivity)
+        self.height = max(self.curvature*self.width//2+1, self.height - self.sensitivity)
 
     def increase_blur(self):
         self.blur += 1
@@ -65,16 +65,16 @@ class Cylinder:
         self.blur = max(0, self.blur - 1)
 
     def increase_curvature(self):
-        self.curvature = min(self.height, self.curvature + self.sensitivity)
+        self.curvature = min(2*self.height/self.width, self.curvature + 2*self.sensitivity/self.width)
 
     def decrease_curvature(self):
-        self.curvature = max(0, self.curvature - self.sensitivity)
+        self.curvature = max(0, self.curvature - 2*self.sensitivity/self.width)
 
     def increase_contrast(self):
-        self.contrast = min(max(0, self.contrast + 0.01), 1)
+        self.contrast = min(max(0., self.contrast + 0.01), 1)
 
     def decrease_contrast(self):
-        self.contrast = min(max(0, self.contrast - 0.01), 1)
+        self.contrast = min(max(0., self.contrast - 0.01), 1)
 
     def increase_sensitivity(self):
         self.sensitivity = min(self.resolution[1] // 3, self.sensitivity + 1)
@@ -89,6 +89,13 @@ class Cylinder:
 
     def transpose(self):
         self.transposed = not self.transposed
+        res_ratio = self.resolution[0] / self.resolution[1]
+        if self.transposed:
+            self.height = int(self.height / res_ratio)
+            self.center = int(self.center * res_ratio)
+        else:
+            self.height = int(self.height * res_ratio)
+            self.center = int(self.center / res_ratio)
 
     def change_color(self):
         colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255)]
@@ -101,7 +108,7 @@ class Cylinder:
                     "h": self.increase_height, "H": self.decrease_height, "b": self.increase_blur,
                     "B": self.decrease_blur, "t": self.transpose,
                     "k": self.increase_curvature, "K": self.decrease_curvature, "f": self.flip,
-                    "c": self.increase_contrast, "C": self.decrease_contrast, '\x08': self.__init__,
+                    "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,
                     "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color}
         if char in func_map:
             func_map[char]()
@@ -109,17 +116,22 @@ class Cylinder:
     def get_img(self):
         img = np.zeros((self.resolution[1], self.resolution[0], 3))
         slice0 = slice(self.center - self.width // 2, self.center + self.width // 2)
-        slice1 = slice(0, self.height - self.curvature)
-        img[slice0, slice1, :] = self.color
+        slice1 = slice(0, self.height - int(self.curvature * self.width / 2))
+        if self.transposed:
+            img[slice1, slice0, :] = self.color
+        else:
+            img[slice0, slice1, :] = self.color
         if self.curvature > 0:
-            img = cv.ellipse(img, (self.height - self.curvature, self.center), (self.curvature, self.width // 2 - 1), 0,
-                             0, 360, self.color, -1)
+            pos = (self.height - int(self.curvature * self.width / 2), self.center)
+            radii = (int(self.curvature * self.width / 2), self.width // 2 - 1)
+            if self.transposed:
+                pos = pos[::-1]
+                radii = radii[::-1]
+            img = cv.ellipse(img, pos, radii, 0, 0, 360, self.color, -1)
         if self.blur > 0:
             img = cv.blur(img.astype(np.uint8), (self.blur, self.blur))
         if self.flipped:
-            img = np.fliplr(img)
-        if self.transposed:
-            img = cv.resize(cv.rotate(img, cv.ROTATE_90_CLOCKWISE), self.resolution)
+            img = np.flipud(img) if self.transposed else np.fliplr(img)
         img = (img * self.contrast).astype(np.uint8)
         return img
 
@@ -183,7 +195,7 @@ class Sphere:
         func_map = {chr(2): self.move_left, chr(3): self.move_right, chr(0): self.move_up, chr(1): self.move_down,
                     "r": self.increase_radius, "R": self.decrease_radius, "b": self.increase_blur,
                     "B": self.decrease_blur,
-                    "c": self.increase_contrast, "C": self.decrease_contrast, '\x08': self.__init__,
+                    "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,
                     "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color}
         if char in func_map:
             func_map[char]()
