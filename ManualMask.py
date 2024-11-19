@@ -65,7 +65,7 @@ class Cylinder:
             self.center = max(self.width//2, self.center - self.sensitivity)
 
     def increase_width(self):
-        self.width = min(self.resolution[1 - self.transposed], int(2*self.height/self.curvature-1), self.width + self.sensitivity)
+        self.width = min(self.resolution[1 - self.transposed], int(2*self.height/(self.curvature+1e-5)-1), self.width + self.sensitivity)
 
     def decrease_width(self):
         self.width = max(2, self.width - self.sensitivity)
@@ -128,7 +128,7 @@ class Cylinder:
             key = key[0]
 
         char = key if type(key) is str else chr(key)
-        func_map = {chr(1): self.move_down, chr(0): self.move_up, chr(2): self.move_left, chr(3): self.move_right, "w": self.increase_width, "W": self.decrease_width,
+        func_map = {chr(1): self.move_down, chr(0): self.move_up, 'M': self.move_left, 'm': self.move_right, "w": self.increase_width, "W": self.decrease_width,
                     "h": self.increase_height, "H": self.decrease_height, "b": self.increase_blur,
                     "B": self.decrease_blur, "t": self.transpose,
                     "k": self.increase_curvature, "K": self.decrease_curvature, "f": self.flip,

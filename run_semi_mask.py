@@ -5,19 +5,21 @@ from ManualMask import Cylinder
 import matplotlib.pyplot as plt
 import matplotlib
 from datetime import datetime
+import time
+import rawpy
 
 matplotlib.use('Qt5Agg')
 
-DEMO = True  # run mask with existing data
+DEMO = False  # run mask with existing data
 # IMG_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'  # folder where camera saves images
 IMG_FOLDER = 'test_folder/'
-ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = chr(0), chr(1), chr(2), chr(3)
+ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 
 
 def main(save_contours=True):
     # initialize
     cyl = Cylinder(resolution=(1920, 1080))
-    cyl.sensitivity = 5  # sensitivity in screen pixels
+    cyl.sensitivity = 2  # sensitivity in screen pixels
     cyl.transpose()
     cv_window()
     log_file = open('logs/log' + datetime_string() + '.txt', 'w')
@@ -36,7 +38,7 @@ def main(save_contours=True):
         plt.ion()
         fig, ax = plt.subplots()
     while True:
-        img_path = IMG_FOLDER + "_{:04d}.jpg".format(img_count)
+        img_path = IMG_FOLDER + "_{:d}.NEF".format(img_count)
         if auto_enabled and (os.path.exists(img_path) or DEMO):
             if DEMO:
                 img = fake_img(cyl, img_count)  # for testing purposes
@@ -45,7 +47,10 @@ def main(save_contours=True):
                 ax.set_title('Iteration {:d}'.format(img_count))
                 plt.pause(0.01)
             else:
-                img = cv.imread(img_path)
+                time.sleep(.5)
+                print("received img {:d}".format(img_count))
+                #img = cv.imread(img_path)
+                img = rawpy.imread(img_path).postprocess()
             img_count += 1
 
             # auto-update screen
@@ -77,10 +82,10 @@ def compute_actions(img, save_folder=None):
     Saves ice contours in save_folder. """
 
     # settings
-    lr_thresh = 0.05  # minimum difference in white area between left and right before moving laterally
-    w_thresh = 60  # maximum difference in mask and ice width in camera pixels
-    h_thresh = 40  # maximum distance between mask and ice tip in camera pixels
-    iw_ratio_thresh = 0.1  # maximum difference in ice area to white area between top and bottom half
+    lr_thresh = 0.1  # minimum difference in white area between left and right before moving laterally
+    w_thresh = 300  # maximum difference in mask and ice width in camera pixels
+    h_thresh = 200  # maximum distance between mask and ice tip in camera pixels
+    iw_ratio_thresh = 999  # maximum difference in ice area to white area between top and bottom half
 
     # setup
     actions = []
@@ -91,7 +96,7 @@ def compute_actions(img, save_folder=None):
     ice_edges = find_edges(ice, largest_only=True)
     mask_edges = find_edges(mask, remove_outside=True)
 
-    if len(ice_edges) == 0:
+    if ice_edges is None:
         print("[compute_actions]: no ice detected")
         return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
 
@@ -116,6 +121,7 @@ def compute_actions(img, save_folder=None):
     max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
     width_diff = max_width_mask - max_width
     if abs(width_diff) > w_thresh:
+        print(abs(width_diff) - w_thresh)
         actions.append("W" if width_diff > 0 else "w")
 
     # Adjust height
@@ -123,6 +129,7 @@ def compute_actions(img, save_folder=None):
     mask_tip_y = np.max(mask_edges[:, 1])
     height_diff = mask_tip_y - tip_y
     if abs(height_diff) > h_thresh:
+        print(abs(height_diff) - h_thresh)
         actions.append("H" if height_diff > 0 else "h")
 
     # Adjust curvature
@@ -160,7 +167,7 @@ def compute_actions_prop(img, save_folder=None):
     ice_edges = find_edges(ice, largest_only=True)
     mask_edges = find_edges(mask, remove_outside=True)
 
-    if len(ice_edges) == 0:
+    if ice_edges is None:
         print("[compute_actions]: no ice detected")
         return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
 
@@ -262,8 +269,8 @@ def find_edges(img, largest_only=False, remove_outside=False):
 
 def cv_window():
     cv.namedWindow("window", cv.WINDOW_NORMAL)
-    # cv.moveWindow("window", 900, 900)
-    # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+    cv.moveWindow("window", 900, 900)
+    cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
 
 def fake_img(cyl, n=0):

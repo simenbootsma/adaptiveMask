@@ -152,6 +152,9 @@ class Camera:
         if image_type == '.CR2':
             return 'CR2'
 
+        if image_type == 'NEF':
+            return '.NEF'
+
         return '.jpg'
 
     def capture_single_image(self, autofocus: bool = False) -> None:

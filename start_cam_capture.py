@@ -2,10 +2,10 @@ import sys
 from Camera import Camera
 
 
-SAVE_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'
+SAVE_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/test_folder/'
 cam_settings = Camera.Settings(aperture='6.3', shutter_speed='1/50', iso=160)
 cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.exe'
-cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER)
+cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER, image_type='NEF')
 cam.setup(cam_settings)
 
 
