@@ -8,7 +8,7 @@ from datetime import datetime
 
 matplotlib.use('Qt5Agg')
 
-
+DEMO = True  # run mask with existing data
 # IMG_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'  # folder where camera saves images
 IMG_FOLDER = 'test_folder/'
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = chr(0), chr(1), chr(2), chr(3)
@@ -31,11 +31,21 @@ def main(save_contours=True):
     # start program
     img_count = 0
     auto_enabled = True
+
+    if DEMO:
+        plt.ion()
+        fig, ax = plt.subplots()
     while True:
-        img_path = IMG_FOLDER + "_{:03d}.jpg".format(img_count)
-        if auto_enabled:# and os.path.exists(img_path):
-            img = fake_img(cyl, img_count)
-            # img = cv.imread(img_path)
+        img_path = IMG_FOLDER + "_{:04d}.jpg".format(img_count)
+        if auto_enabled and (os.path.exists(img_path) or DEMO):
+            if DEMO:
+                img = fake_img(cyl, img_count)  # for testing purposes
+                ax.clear()
+                ax.imshow(img)
+                ax.set_title('Iteration {:d}'.format(img_count))
+                plt.pause(0.01)
+            else:
+                img = cv.imread(img_path)
             img_count += 1
 
             # auto-update screen
@@ -82,7 +92,7 @@ def compute_actions(img, save_folder=None):
 
     if len(ice_edges) == 0:
         print("[compute_actions]: no ice detected")
-        return actions
+        return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
 
     # Save ice contour
     now = datetime.now()
@@ -176,6 +186,7 @@ def cv_window():
 
 def fake_img(cyl, n=0):
     arr = np.load('test_data/test_data4.npy')
+    n = min(n, arr.shape[-1])
     ice = arr[:, :, n]
     screen = cv.cvtColor(cyl.get_img(), cv.COLOR_RGB2GRAY)
     img = cv.resize(screen, (2 * cyl.resolution[0], 2*cyl.resolution[1]))
