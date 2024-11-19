@@ -4,6 +4,7 @@ import os.path
 from ManualMask import Cylinder
 import matplotlib.pyplot as plt
 import matplotlib
+from datetime import datetime
 
 matplotlib.use('Qt5Agg')
 
@@ -13,48 +14,57 @@ IMG_FOLDER = 'test_folder/'
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = chr(0), chr(1), chr(2), chr(3)
 
 
-def main():
+def main(save_contours=True):
     # initialize
     cyl = Cylinder(resolution=(1920, 1080))
     cyl.sensitivity = 10  # sensitivity in screen pixels
     cyl.transpose()
     cv_window()
+    log_file = open('logs/log' + datetime_string() + '.txt', 'w')
+
+    if save_contours:
+        ic_folder = "auto_contours/ice_contours" + datetime_string()
+        os.mkdir(ic_folder)
+    else:
+        ic_folder = None
 
     # start program
     img_count = 0
     auto_enabled = True
     while True:
-        img_path = IMG_FOLDER + "_{:d}.jpg".format(img_count)
-        if auto_enabled and os.path.exists(img_path):
+        img_path = IMG_FOLDER + "_{:03d}.jpg".format(img_count)
+        if auto_enabled:# and os.path.exists(img_path):
+            img = fake_img(cyl, img_count)
             # img = cv.imread(img_path)
-            # img_count += 1
-
-            img = fake_img(cyl)
+            img_count += 1
 
             # auto-update screen
-            actions = compute_actions(img)
+            actions = compute_actions(img, save_folder=ic_folder)
             print(actions)
             for a in actions:
                 cyl.handle_key(a)
+            log_actions(log_file, actions, auto=True)
 
-            if len(actions) == 0:
-                plt.imshow(img)
-                plt.show()
         key = cv.waitKey(10)
         if key == 27:
             break
         elif key == ord('a'):
             auto_enabled = not auto_enabled
-            print("Auto mode \033[1m{:s}\033[0m.".format("enabled" if auto_enabled else "disabled"))
+            line = "Auto mode {:s}".format("enabled" if auto_enabled else "disabled")
+            print(line)
+            log_file.write("[{:s}] ".format(datetime.now().ctime()) + line + "\n")
         elif key != -1:
-            print(key)
             cyl.handle_key(key)
+            log_actions(log_file, [chr(key)], auto=False)
         cv.imshow("window", cyl.get_img())
     cv.destroyWindow("window")
+    log_file.close()
 
 
-def compute_actions(img):
-    """ Find which buttons should be pressed to improve masking. Assumes vertical cylinder suspended from the top. """
+def compute_actions(img, save_folder=None):
+    """ Find which buttons should be pressed to improve masking. Assumes vertical cylinder suspended from the top.
+    Saves ice contours in save_folder. """
+
     # settings
     lr_thresh = 0.05  # minimum difference in white area between left and right before moving laterally
     w_thresh = 80  # maximum difference in mask and ice width in camera pixels
@@ -74,6 +84,11 @@ def compute_actions(img):
         print("[compute_actions]: no ice detected")
         return actions
 
+    # Save ice contour
+    now = datetime.now()
+    fname = "contour_h{:02d}m{:02d}s{:02d}_us{:06d}.npy".format(now.hour, now.minute, now.second, now.microsecond)
+    np.save(save_folder + '/' + fname, ice_edges)
+
     M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
 
     # Move left/right?
@@ -88,7 +103,6 @@ def compute_actions(img):
     max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
     max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
     width_diff = max_width_mask - max_width
-    print(width_diff)
     if abs(width_diff) > w_thresh:
         actions.append("W" if width_diff > 0 else "w")
 
@@ -160,13 +174,33 @@ def cv_window():
     # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
 
-def fake_img(cyl):
+def fake_img(cyl, n=0):
     arr = np.load('test_data/test_data4.npy')
-    ice = arr[:, :, 0]
+    ice = arr[:, :, n]
     screen = cv.cvtColor(cyl.get_img(), cv.COLOR_RGB2GRAY)
     img = cv.resize(screen, (2 * cyl.resolution[0], 2*cyl.resolution[1]))
     img[:1000, 1800:2200] -= np.flipud(ice)
     return np.stack((img, img, img), axis=-1)
+
+
+def datetime_string():
+    now = datetime.now()
+    return "{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}".format(now.year, now.month, now.day, now.hour, now.minute, now.second)
+
+
+def log_actions(file, actions, auto=False):
+    now = datetime.now()
+    arrows = {'\x00': '↑', '\x01': '↓', '\x02': '←', '\x03': '→'}
+    for a in actions:
+        if a in arrows:
+            a = arrows[a]
+        line = "[{:s}] ".format(now.ctime()) + ("Auto-pressed" if auto else "Pressed") + " {:s}\n".format(a)
+        file.write(line)
+    file.write("\n")
+
+
+def write_log(file, line):
+    file.write("[{:s}] ".format(datetime.now().ctime()) + line)
 
 
 if __name__ == '__main__':

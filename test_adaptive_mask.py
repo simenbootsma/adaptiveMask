@@ -3,11 +3,13 @@ import cv2 as cv
 import matplotlib.pyplot as plt
 import matplotlib
 from AdaptiveMask import AdaptiveMask
+from glob import glob
 
 matplotlib.use('Qt5Agg')
 
 
 def main():
+    show_auto_contours("auto_contours/ice_contours20241119_104422/")
     # test_data_from_vc_contours()
     # show_test_data(4)
     # test_data_from_hc_contours()
@@ -16,18 +18,33 @@ def main():
 
 def run_test(num):
     arr = np.load('test_data/test_data{:d}.npy'.format(num))
-    test0 = arr[:, :, 0]
 
-    img = np.zeros((2000, 4000))
-    img[:1000, 1800:2200] = np.flipud(test0)
-    mask = 255 * np.ones(img.shape)
-    mask[:1000, 1800:2200] = 0
-    mask = cv.blur(mask, (51, 51))
-    M = 255 - (mask + img)
-    rgb = np.stack((M, M, M), axis=-1).astype(np.uint8)
-    plt.imshow(rgb)
-    plt.imsave('test_folder/_0.jpg', rgb)
+    for n in range(50):
+        test0 = arr[:, :, 0]
+
+        img = np.zeros((2000, 4000))
+        img[:1000, 1800:2200] = np.flipud(test0)
+        mask = 255 * np.ones(img.shape)
+        mask[:1000, 1800:2200] = 0
+        mask = cv.blur(mask, (51, 51))
+        M = 255 - (mask + img)
+        rgb = np.stack((M, M, M), axis=-1).astype(np.uint8)
+        # plt.imshow(rgb)
+        plt.imsave('test_folder/_{:03d}.jpg'.format(n), rgb)
     plt.show()
+
+
+def show_auto_contours(folder):
+    files = sorted(glob(folder + "*.npy"))
+    contours = [np.load(f) for f in files]
+
+    plt.figure()
+    for c in contours:
+        plt.plot(c[:, 0], c[:, 1])
+    plt.gca().invert_yaxis()
+    plt.gca().set_aspect('equal')
+    plt.show()
+
 
 
 def show_test_data(num):
