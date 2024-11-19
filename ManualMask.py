@@ -121,6 +121,12 @@ class Cylinder:
         self.color = colors[self.color_idx]
 
     def handle_key(self, key):
+        # temporary hack to test proportionality stuff
+        s = self.sensitivity
+        if type(key) is tuple:
+            self.sensitivity = int(key[1])
+            key = key[0]
+
         char = key if type(key) is str else chr(key)
         func_map = {chr(1): self.move_down, chr(0): self.move_up, chr(2): self.move_left, chr(3): self.move_right, "w": self.increase_width, "W": self.decrease_width,
                     "h": self.increase_height, "H": self.decrease_height, "b": self.increase_blur,
@@ -130,6 +136,8 @@ class Cylinder:
                     "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color}
         if char in func_map:
             func_map[char]()
+
+        self.sensitivity = s
 
     def get_img(self):
         img = np.zeros((self.resolution[1], self.resolution[0], 3))
