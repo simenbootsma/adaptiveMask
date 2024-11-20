@@ -22,7 +22,7 @@ def main(save_contours=True):
     cyl = Cylinder(resolution=(1920, 1080))
     cyl.sensitivity = 2  # sensitivity in screen pixels
     cyl.transpose()
-    cv_window_mac()
+    cv_window()
     log_file = open('logs/log' + datetime_string() + '.txt', 'w')
 
     if save_contours:
