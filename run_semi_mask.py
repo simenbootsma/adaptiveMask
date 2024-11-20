@@ -6,13 +6,14 @@ import matplotlib.pyplot as plt
 import matplotlib
 from datetime import datetime
 import time
-import rawpy
+from glob import glob
 
 matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
 # IMG_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'  # folder where camera saves images
 IMG_FOLDER = 'test_folder/'
+IMG_FOLDER = '/Users/simenbootsma/Pictures/'
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 
 
@@ -21,7 +22,7 @@ def main(save_contours=True):
     cyl = Cylinder(resolution=(1920, 1080))
     cyl.sensitivity = 2  # sensitivity in screen pixels
     cyl.transpose()
-    cv_window()
+    cv_window_mac()
     log_file = open('logs/log' + datetime_string() + '.txt', 'w')
 
     if save_contours:
@@ -33,13 +34,14 @@ def main(save_contours=True):
     # start program
     img_count = 0
     auto_enabled = True
+    img_paths = glob(IMG_FOLDER + '*.JPG')
 
     if DEMO:
         plt.ion()
         fig, ax = plt.subplots()
     while True:
-        img_path = IMG_FOLDER + "_{:d}.NEF".format(img_count)
-        if auto_enabled and (os.path.exists(img_path) or DEMO):
+        new_images = sorted([fn for fn in glob(IMG_FOLDER + "*.JPG") if fn not in img_paths])
+        if auto_enabled and (len(new_images) > 0 or DEMO):
             if DEMO:
                 img = fake_img(cyl, img_count)  # for testing purposes
                 ax.clear()
@@ -49,8 +51,9 @@ def main(save_contours=True):
             else:
                 time.sleep(.5)
                 print("received img {:d}".format(img_count))
-                #img = cv.imread(img_path)
-                img = rawpy.imread(img_path).postprocess()
+                img = cv.imread(new_images[0])
+                # img = rawpy.imread(new_images[0]).postprocess()
+                img_paths.append(new_images[0])
             img_count += 1
 
             # auto-update screen
@@ -360,8 +363,8 @@ def find_edges(img, largest_only=False, remove_outside=False):
 
 def cv_window():
     cv.namedWindow("window", cv.WINDOW_NORMAL)
-    cv.moveWindow("window", 900, 900)
-    cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+    cv.moveWindow("window", 2900, 400)
+    # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
 
 def fake_img(cyl, n=0):
