@@ -122,8 +122,9 @@ class Cylinder:
 
     def handle_key(self, key):
         # temporary hack to test proportionality stuff
-        s = self.sensitivity
+        s = None
         if type(key) is tuple:
+            s = self.sensitivity
             self.sensitivity = int(key[1])
             key = key[0]
 
@@ -137,7 +138,8 @@ class Cylinder:
         if char in func_map:
             func_map[char]()
 
-        self.sensitivity = s
+        if s is not None:
+            self.sensitivity = s
 
     def get_img(self):
         img = np.zeros((self.resolution[1], self.resolution[0], 3))
