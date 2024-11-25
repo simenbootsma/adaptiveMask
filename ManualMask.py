@@ -54,13 +54,13 @@ class Cylinder:
 
     def move_right(self):
         if not self.transposed:
-            self.move_down()
+            self.move_up()
         else:
             self.center = min(self.resolution[0]-self.width//2, self.center + self.sensitivity)
 
     def move_left(self):
         if not self.transposed:
-            self.move_up()
+            self.move_down()
         else:
             self.center = max(self.width//2, self.center - self.sensitivity)
 
