@@ -74,7 +74,11 @@ class Cylinder:
         self.height = min(self.resolution[self.transposed], self.height + self.sensitivity)
 
     def decrease_height(self):
-        self.height = max(int(self.curvature*self.width/2)+1, self.height - self.sensitivity)
+        min_height = int(self.curvature*self.width/2)+1
+        while self.height - self.sensitivity < min_height:
+            self.decrease_curvature()
+            min_height = int(self.curvature * self.width / 2) + 1
+        self.height = self.height - self.sensitivity
 
     def increase_blur(self):
         self.blur += 1
