@@ -80,72 +80,6 @@ def main(save_contours=True):
     log_file.close()
 
 
-# def compute_actions(img, save_folder=None):
-#     """ Find which buttons should be pressed to improve masking.
-#     NOTE: Assumes vertical cylinder suspended from the top.
-#     Saves ice contours in save_folder. """
-#
-#     # settings
-#     lr_thresh = 0.1  # minimum difference in white area between left and right before moving laterally
-#     w_thresh = 100  # maximum difference in mask and ice width in camera pixels
-#     h_thresh = 50  # maximum distance between mask and ice tip in camera pixels
-#     k_thresh = 20  # maximum difference in white area width between tip and average in camera pixels
-#
-#     # setup
-#     actions = []
-#     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-#     img[:10, :] = 255  # make top edge white, assuming ice object suspended from top
-#     mask, ice = find_mask_and_ice(img)
-#     mask[:10, :] = 1  # add top edge back in mask
-#     ice_edges = find_edges(ice, largest_only=True)
-#     mask_edges = find_edges(mask, remove_outside=True)
-#
-#     if ice_edges is None:
-#         print("[compute_actions]: no ice detected")
-#         return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
-#
-#     if save_folder is not None:
-#         # Save ice contour
-#         now = datetime.now()
-#         fname = "contour_h{:02d}m{:02d}s{:02d}_us{:06d}.npy".format(now.hour, now.minute, now.second, now.microsecond)
-#         np.save(save_folder + '/' + fname, ice_edges)
-#
-#     M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
-#
-#     # Move left/right?
-#     cx = int(np.mean(ice_edges[:, 0]))
-#     x_diff = (np.sum(M[:, cx:]) - np.sum(M[:, :cx]))/np.sum(M)  # normalised difference in white area between left and right side of the cylinder
-#     if abs(x_diff) > lr_thresh:
-#         actions.append(ARROW_LEFT if x_diff > 0 else ARROW_RIGHT)
-#
-#     # Adjust width
-#     min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
-#     sorted_ice_edges_x = np.sort(ice_edges[:, 0])
-#     max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
-#     max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
-#     width_diff = max_width_mask - max_width
-#     if abs(width_diff) > w_thresh:
-#         print(abs(width_diff) - w_thresh)
-#         actions.append("W" if width_diff > 0 else "w")
-#
-#     # Adjust height
-#     tip_y = int(np.mean(np.sort(ice_edges[:, 1])[max_ind:]))
-#     mask_tip_y = np.max(mask_edges[:, 1])
-#     height_diff = mask_tip_y - tip_y
-#     if abs(height_diff) > h_thresh:
-#         print(abs(height_diff) - h_thresh)
-#         actions.append("H" if height_diff > 0 else "h")
-#
-#     # Adjust curvature
-#     avg_white_area = np.sum(M[:tip_y, :]) / tip_y
-#     tip_white_area = np.sum(M[int(.9*tip_y):tip_y, :]) / (tip_y - int(.9*tip_y))
-#
-#     k_diff = tip_white_area - avg_white_area
-#     if abs(k_diff) > k_thresh: # and ("h" not in actions and "H" not in actions):
-#         actions.append("k" if k_diff > 0 else "K")
-#     return actions
-
-
 def compute_actions_fuzzy(img, save_folder=None, count=None):
     """ Find which buttons should be pressed to improve masking.
     NOTE: Assumes vertical cylinder suspended from the top.
@@ -184,61 +118,42 @@ def compute_actions_fuzzy(img, save_folder=None, count=None):
     # Move left/right?
     cx = int(np.mean(ice_edges[:, 0]))
     x_diff = (np.sum(M[:, cx:]) - np.sum(M[:, :cx]))/np.sum(M)  # normalised difference in white area between left and right side of the cylinder
-    # if abs(x_diff) > x_thresh:
-    #     actions.append(ARROW_LEFT if x_diff > 0 else ARROW_RIGHT)
 
     # Adjust width
     min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
     sorted_ice_edges_x = np.sort(ice_edges[:, 0])
     max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
     max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
-    width_diff = max_width_mask - max_width
-    # if abs(width_diff) > w_thresh:
-    #     print(abs(width_diff) - w_thresh)
-    #     actions.append("W" if width_diff > 0 else "w")
+    w_diff = max_width_mask - max_width
 
     # Adjust height
     tip_y = int(np.mean(np.sort(ice_edges[:, 1])[max_ind:]))
     mask_tip_y = np.max(mask_edges[:, 1])
-    height_diff = mask_tip_y - tip_y
-    # if abs(height_diff) > h_thresh:
-    #     print(abs(height_diff) - h_thresh)
-    #     actions.append("H" if height_diff > 0 else "h")
+    h_diff = mask_tip_y - tip_y
 
     # Adjust curvature
-    # avg_white_area = np.sum(M[:tip_y, :]) / tip_y
-    # tip_white_area = np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
-    # if np.min(tip_white_area) < avg_white_area:
-    #     k_diff = np.min(tip_white_area) - avg_white_area
-    # else:
-    #     k_diff = np.max(tip_white_area) - avg_white_area
-
     avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
     tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
-
     if np.max(tip_iw_ratio) > avg_iw_ratio:
         k_diff = avg_iw_ratio/np.max(tip_iw_ratio) - 1
     else:
         k_diff = avg_iw_ratio / np.min(tip_iw_ratio) - 1
-
-    # if abs(k_diff) > k_thresh: # and ("h" not in actions and "H" not in actions):
-    #     actions.append("k" if k_diff > 0 else "K")
 
     # Make action list
     if abs(x_diff) > x_thresh:
         s = sensitivity_large if abs(x_diff) > 2 * x_thresh else sensitivity_small
         actions.append((ARROW_LEFT if x_diff > 0 else ARROW_RIGHT, s))
 
-    if abs(width_diff) > w_thresh:
-        # print(abs(width_diff) - w_thresh)
-        s = sensitivity_large if abs(width_diff) > 2 * w_thresh else sensitivity_small
-        actions.append(("W" if width_diff > 0 else "w", s))
+    if abs(w_diff) > w_thresh:
+        # print(abs(w_diff) - w_thresh)
+        s = sensitivity_large if abs(w_diff) > 2 * w_thresh else sensitivity_small
+        actions.append(("W" if w_diff > 0 else "w", s))
 
     changing_height = False
-    if abs(height_diff) > h_thresh:
-        # print(abs(height_diff) - h_thresh)
-        s = sensitivity_large if abs(height_diff) > 2 * h_thresh else sensitivity_small
-        actions.append(("H" if height_diff > 0 else "h", s))
+    if abs(h_diff) > h_thresh:
+        # print(abs(h_diff) - h_thresh)
+        s = sensitivity_large if abs(h_diff) > 2 * h_thresh else sensitivity_small
+        actions.append(("H" if h_diff > 0 else "h", s))
         changing_height = True
 
     if abs(k_diff) > k_thresh and not changing_height:
@@ -247,8 +162,8 @@ def compute_actions_fuzzy(img, save_folder=None, count=None):
 
     err_str = [
         " ok " if abs(x_diff) <= x_thresh else "{:.02f}".format(x_diff/x_thresh),
-        " ok " if abs(width_diff) <= w_thresh else "{:.02f}".format(width_diff / w_thresh),
-        " ok " if abs(height_diff) <= h_thresh else "{:.02f}".format(height_diff / h_thresh),
+        " ok " if abs(w_diff) <= w_thresh else "{:.02f}".format(w_diff / w_thresh),
+        " ok " if abs(h_diff) <= h_thresh else "{:.02f}".format(h_diff / h_thresh),
         " ok " if abs(k_diff) <= k_thresh else "{:.02f}".format(k_diff / k_thresh),
     ]
 
@@ -263,87 +178,6 @@ def compute_actions_fuzzy(img, save_folder=None, count=None):
     count_str = "" if count is None else "[IMG {:d}]".format(count)
     print("\r"+count_str+" Errors  |  x: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
     return actions
-
-
-# def compute_actions_prop(img, save_folder=None):
-#     """ Find which buttons should be pressed to improve masking.
-#     NOTE: Assumes vertical cylinder suspended from the top.
-#     Saves ice contours in save_folder if it is not None. """
-#
-#     # settings
-#     sensitivity = 1  # overall sensitivity
-#     lr_thresh = 0.05  # minimum difference in white area between left and right before moving laterally
-#     m_prop = sensitivity * 10  # movement proportionality factor
-#     w_thresh = 80  # maximum difference in mask and ice width in camera pixels
-#     w_prop = sensitivity * 0.1  # width proportionality factor
-#     h_thresh = 50  # maximum distance between mask and ice tip in camera pixels
-#     h_prop = sensitivity * 0.1  # height proportionality factor
-#     iw_ratio_thresh = 0.1  # maximum difference in ice area to white area between top and bottom half
-#     k_prop = sensitivity * 0.1  # curvature proportionality factor
-#
-#     # setup
-#     actions = []
-#     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-#     img[:10, :] = 255  # make top edge white, assuming ice object suspended from top
-#     mask, ice = find_mask_and_ice(img)
-#     mask[:10, :] = 1  # add top edge back in mask
-#     ice_edges = find_edges(ice, largest_only=True)
-#     mask_edges = find_edges(mask, remove_outside=True)
-#
-#     if ice_edges is None:
-#         print("[compute_actions]: no ice detected")
-#         return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
-#
-#     if save_folder is not None:
-#         # Save ice contour
-#         now = datetime.now()
-#         fname = "contour_h{:02d}m{:02d}s{:02d}_us{:06d}.npy".format(now.hour, now.minute, now.second, now.microsecond)
-#         np.save(save_folder + '/' + fname, ice_edges)
-#
-#     M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
-#
-#
-#     # Move left/right?
-#     cx = int(np.mean(ice_edges[:, 0]))
-#     x_diff = (np.sum(M[:, cx:]) - np.sum(M[:, :cx]))/np.sum(M)  # normalised difference in white area between left and right side of the cylinder
-#     if abs(x_diff) > lr_thresh:
-#         key, val = ARROW_LEFT if x_diff > 0 else ARROW_RIGHT, m_prop * (abs(x_diff) - lr_thresh)
-#         actions.append((key, val))
-#         # actions.append(key)
-#
-#     # Adjust width
-#     min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
-#     sorted_ice_edges_x = np.sort(ice_edges[:, 0])
-#     max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
-#     max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
-#     width_diff = max_width_mask - max_width
-#     if abs(width_diff) > w_thresh:
-#         key, val = "W" if width_diff > 0 else "w", w_prop * (abs(width_diff) - w_thresh)
-#         actions.append((key, val))
-#
-#     # Adjust height
-#     tip_y = int(np.mean(np.sort(ice_edges[:, 1])[max_ind:]))
-#     mask_tip_y = np.max(mask_edges[:, 1])
-#     height_diff = mask_tip_y - tip_y
-#     if abs(height_diff) > h_thresh:
-#         key, val = "H" if height_diff > 0 else "h", h_prop * (abs(height_diff) - h_thresh)
-#         actions.append((key, val))
-#
-#     # Adjust curvature
-#     cy = int(np.mean(ice_edges[:, 1]))
-#     avg_tip_width = 2 * np.std(ice_edges[ice_edges[:, 1] > 0.95*tip_y, 0])
-#     me = mask_edges[mask_edges[:, 1] > .95*tip_y]
-#     me = me[me[:, 1] < np.max(ice_edges[:, 1])]
-#     avg_tip_width_mask = 2 * np.std(me[:, 0])
-#     iw_ratio_diff = (avg_tip_width_mask - avg_tip_width) - width_diff
-#
-#     iw_ratio_top = np.sum(ice[:cy, :]) / np.sum(M[:cy, :])  # ice area to white area ratio of top half
-#     iw_ratio_bot = np.sum(ice[cy:tip_y, :]) / np.sum(M[cy:tip_y, :])  # ice area to white area ratio of bottom half
-#     # iw_ratio_diff = iw_ratio_top - iw_ratio_bot
-#     if abs(iw_ratio_diff) > iw_ratio_thresh:
-#         key, val = "k" if iw_ratio_diff > 0 else "K", k_prop * (abs(iw_ratio_diff) - iw_ratio_thresh)
-#         actions.append((key, val))
-#     return actions
 
 
 def find_mask_and_ice(img):
