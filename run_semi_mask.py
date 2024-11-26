@@ -12,9 +12,8 @@ import shutil
 matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
-# IMG_FOLDER = 'C:/Users/local.la/Documents/Masking/adaptiveMask/auto_images/'  # folder where camera saves images
-IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/'
-# IMG_FOLDER = '/Volumes/Elements/VC_coldroom/'
+IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/'  # folder where images ares saved
+ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241127/'  # folder for communicating with external computer
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 
 
@@ -25,6 +24,9 @@ def main(save_contours=True):
     cyl.transpose()
     cv_window()
     log_file = open('logs/log' + datetime_string() + '.txt', 'w')
+    for s in ['jpg', 'updates', 'commands']:
+        if not os.path.exists(ONEDRIVE_FOLDER + s):
+            os.mkdir(ONEDRIVE_FOLDER + s)
 
     if save_contours:
         ic_folder = "auto_contours/ice_contours" + datetime_string()
@@ -36,6 +38,7 @@ def main(save_contours=True):
     img_count = 0
     auto_enabled = True
     img_paths = glob(IMG_FOLDER + '*.JPG')
+    command_paths = glob(ONEDRIVE_FOLDER + 'commands/*.txt')
 
     if DEMO:
         plt.ion()
@@ -52,18 +55,33 @@ def main(save_contours=True):
             else:
                 time.sleep(.5)
                 img = cv.imread(new_images[0])
-                # img = rawpy.imread(new_images[0]).postprocess()
                 img_paths.append(new_images[0])
-                shutil.copyfile(new_images[0], '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/IMG_{:05d}.jpg'.format(img_count))
+                shutil.copyfile(new_images[0], ONEDRIVE_FOLDER + 'jpg/IMG_{:05d}.jpg'.format(img_count))
             img_count += 1
 
             # auto-update screen
-            actions = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count)
-            # print(actions)
-            for a in actions:
+            auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
+            for a in auto_actions:
                 cyl.handle_key(a)
-            log_actions(log_file, actions, auto=True)
+            log_actions(log_file, auto_actions, auto=True)
+            give_update(errors, cyl, img_count)
 
+        # check for external commands and update screen
+        command_files = [fpath for fpath in glob(ONEDRIVE_FOLDER + 'commands/*.txt') if fpath not in command_paths]
+        command_actions = []
+        for cf in command_files:
+            print('received file!')
+            time.sleep(0.5)  # wait before reading to make sure file is closed
+            command_actions += list(open(cf, 'r').read())
+            command_paths.append(cf)
+        if len(command_actions) > 0:
+            print(command_actions)
+        command_actions = [ca for ca in command_actions if ca.lower() in 'swhkm']
+        for a in command_actions:
+            cyl.handle_key(a)
+        log_actions(log_file, command_actions, auto=False)
+
+        # handle key presses
         key = cv.waitKey(10)
         if key == 27:
             break
@@ -75,24 +93,26 @@ def main(save_contours=True):
         elif key != -1:
             cyl.handle_key(key)
             log_actions(log_file, [chr(key)], auto=False)
+
+        # show screen
         cv.imshow("window", cyl.get_img())
+
     cv.destroyWindow("window")
     log_file.close()
 
 
-def compute_actions_fuzzy(img, save_folder=None, count=None):
+def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False):
     """ Find which buttons should be pressed to improve masking.
     NOTE: Assumes vertical cylinder suspended from the top.
     Saves ice contours in save_folder. """
 
     # settings
-    sensitivity_small = 1
+    sensitivity_small = 2
     sensitivity_large = 10
     x_thresh = 0.1  # minimum difference in white area between left and right before moving laterally
     w_thresh = 300  # maximum difference in mask and ice width in camera pixels
     h_thresh = 200  # maximum distance between mask and ice tip in camera pixels
-    # k_thresh = 5      # maximum deviation from width at bottom in camera pixels
-    k_thresh = 1
+    k_thresh = 1      # maximum deviation from width at bottom in camera pixels
 
     # setup
     actions = []
@@ -161,7 +181,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None):
         actions.append(("k" if k_diff > 0 else "K", s))
 
     err_str = [
-        " ok " if abs(x_diff) <= x_thresh else "{:.02f}".format(x_diff/x_thresh),
+        " ok " if abs(x_diff) <= x_thresh else "{:.02f}".format(x_diff / x_thresh),
         " ok " if abs(w_diff) <= w_thresh else "{:.02f}".format(w_diff / w_thresh),
         " ok " if abs(h_diff) <= h_thresh else "{:.02f}".format(h_diff / h_thresh),
         " ok " if abs(k_diff) <= k_thresh else "{:.02f}".format(k_diff / k_thresh),
@@ -177,6 +197,11 @@ def compute_actions_fuzzy(img, save_folder=None, count=None):
             err_str[i] = "\033[31m" + err_str[i] + "\033[0m"
     count_str = "" if count is None else "[IMG {:d}]".format(count)
     print("\r"+count_str+" Errors  |  x: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
+
+    if return_errors:
+        errors = {'x': (x_diff, x_diff/x_thresh), 'w': (w_diff, w_diff/w_thresh), 'h': (h_diff, h_diff/h_thresh),
+                  'k': (k_diff, k_diff/k_thresh)}  # tuples of absolute and relative errors
+        return actions, errors
     return actions
 
 
@@ -227,7 +252,7 @@ def find_edges(img, largest_only=False, remove_outside=False):
 
 def cv_window():
     cv.namedWindow("window", cv.WINDOW_NORMAL)
-    cv.moveWindow("window", 2900, 400)
+    cv.moveWindow("window", 900, 400)
     # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
 
@@ -266,6 +291,18 @@ def log_actions(file, actions, auto=False):
 
 def write_log(file, line):
     file.write("[{:s}] ".format(datetime.now().ctime()) + line)
+
+
+def give_update(errors, cyl, img_count):
+    """ Write update for external computer, containing current errors and parameter values """
+    f = open(ONEDRIVE_FOLDER + 'updates/update_{:04d}.txt'.format(img_count), 'w')
+
+    parameters = ['sensitivity', 'center', 'width', 'height', 'blur', 'curvature', 'flipped', 'transposed', 'contrast']
+    parameters = [p + ': ' + str(cyl.__getattribute__(p)) for p in parameters]
+    errors = ['err_' + key + ': ' + str(val) for key, val in errors.items()]
+
+    f.write("\n".join(parameters + errors))
+    f.close()
 
 
 if __name__ == '__main__':
