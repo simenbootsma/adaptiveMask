@@ -1,4 +1,3 @@
-import shutil
 from glob import glob
 import time
 import sys
@@ -6,20 +5,23 @@ import select
 
 
 FOLDER = "/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241127/"  # must contain jpg, updates, commands folders
-update_paths = []#glob(FOLDER + "updates/*.txt")
+update_paths = glob(FOLDER + "updates/*.txt")
 
 
 def main():
+    # TODO: make a simple GUI that allows for reading updates and writing commands simultaneously
     while True:
         read_update()
-        time.sleep(0.01)
+        time.sleep(0.1)
 
 
 def write_command():
     N = len(glob(FOLDER + "commands/*.txt"))
-    command = input("Write command here: ")
-    i, o, e = select.select([sys.stdin], [], [], 10)
+    print("Write command here: ")
+    i, _, _ = select.select([sys.stdin], [], [], 10)
     if i:
+        command = sys.stdin.readline().strip()
+        print(command)
         with open(FOLDER + "commands/command_{:04d}.txt".format(N), 'w') as f:
             f.write(command)
 
@@ -28,6 +30,7 @@ def read_update():
     global update_paths
     updates = sorted(glob(FOLDER + 'updates/*.txt'))
     if len(updates) > 0 and updates[-1] not in update_paths:
+        time.sleep(0.5)  # wait before reading to allow for writing time
         data = [line[:-1].split(': ') for line in open(updates[-1], 'r').readlines()]
         data = [val for val in data if len(val) == 2]
         dct = {key: val for key, val in data}
