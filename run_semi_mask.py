@@ -13,7 +13,7 @@ matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
 IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/'  # folder where images ares saved
-ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241127/'  # folder for communicating with external computer
+ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/'  # folder for communicating with external computer
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 
 
@@ -21,7 +21,6 @@ def main(save_contours=True):
     # initialize
     cyl = Cylinder(resolution=(1920, 1080))
     cyl.sensitivity = 10  # sensitivity in screen pixels
-    cyl.transpose()
     cv_window()
     log_file = open('logs/log' + datetime_string() + '.txt', 'w')
     for s in ['jpg', 'updates', 'commands']:
@@ -64,7 +63,8 @@ def main(save_contours=True):
             for a in auto_actions:
                 cyl.handle_key(a)
             log_actions(log_file, auto_actions, auto=True)
-            give_update(errors, cyl, img_count)
+            if errors is not None:
+                give_update(errors, cyl, img_count)
 
         # check for external commands and update screen
         command_files = [fpath for fpath in glob(ONEDRIVE_FOLDER + 'commands/*.txt') if fpath not in command_paths]
@@ -110,8 +110,8 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     sensitivity_small = 2
     sensitivity_large = 10
     x_thresh = 0.1  # minimum difference in white area between left and right before moving laterally
-    w_thresh = 300  # maximum difference in mask and ice width in camera pixels
-    h_thresh = 200  # maximum distance between mask and ice tip in camera pixels
+    w_thresh = 200  # maximum difference in mask and ice width in camera pixels
+    h_thresh = 100  # maximum distance between mask and ice tip in camera pixels
     k_thresh = 1      # maximum deviation from width at bottom in camera pixels
 
     # setup
@@ -125,7 +125,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
 
     if ice_edges is None:
         print("[compute_actions]: no ice detected")
-        return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
+        return ['w', 'h', 'K'], None  # if no ice is detected, increase width and height, decrease curvature
 
     if save_folder is not None:
         # Save ice contour
