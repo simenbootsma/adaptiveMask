@@ -84,12 +84,12 @@ def main(page: ft.Page):
     )
 
     page.add(t)
-    page.window.height = 800
+    page.window.height = 600
     page.update()
 
     # cboard.update(r'update_example.txt')
     for i in range(12, 100):
-        cboard.update(r'C:\Users\Simen\OneDrive - University of Twente\VC_coldroom\ColdVC_20241128\updates/update_{:04d}.txt'.format(i))
+        cboard.update(r'/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/updates/update_{:04d}.txt'.format(i))
         time.sleep(1)
 
 

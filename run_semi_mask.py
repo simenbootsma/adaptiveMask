@@ -12,8 +12,8 @@ import shutil
 matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
-IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/'  # folder where images ares saved
-ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241127/'  # folder for communicating with external computer
+IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241210/'  # folder where images ares saved
+ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241210/'  # folder for communicating with external computer
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 
 
@@ -59,12 +59,17 @@ def main(save_contours=True):
                 shutil.copyfile(new_images[0], ONEDRIVE_FOLDER + 'jpg/IMG_{:05d}.jpg'.format(img_count))
             img_count += 1
 
-            # auto-update screen
-            auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
-            for a in auto_actions:
-                cyl.handle_key(a)
-            log_actions(log_file, auto_actions, auto=True)
-            give_update(errors, cyl, img_count)
+            try:
+                # auto-update screen
+                auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
+                for a in auto_actions:
+                    cyl.handle_key(a)
+                log_actions(log_file, auto_actions, auto=True)
+                if errors is not None and not DEMO:
+                    give_update(errors, cyl, img_count)
+            except:
+                print("An error occurred in updating the screen")
+                pass
 
         # check for external commands and update screen
         command_files = [fpath for fpath in glob(ONEDRIVE_FOLDER + 'commands/*.txt') if fpath not in command_paths]
@@ -112,7 +117,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     x_thresh = 0.1  # minimum difference in white area between left and right before moving laterally
     w_thresh = 300  # maximum difference in mask and ice width in camera pixels
     h_thresh = 200  # maximum distance between mask and ice tip in camera pixels
-    k_thresh = 1      # maximum deviation from width at bottom in camera pixels
+    k_thresh = 50      # maximum deviation from width at bottom in camera pixels
 
     # setup
     actions = []
@@ -125,6 +130,8 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
 
     if ice_edges is None:
         print("[compute_actions]: no ice detected")
+        if return_errors:
+            return ['w', 'h', 'K'], None
         return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
 
     if save_folder is not None:
@@ -151,13 +158,27 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     mask_tip_y = np.max(mask_edges[:, 1])
     h_diff = mask_tip_y - tip_y
 
-    # Adjust curvature
-    avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
-    tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
-    if np.max(tip_iw_ratio) > avg_iw_ratio:
-        k_diff = avg_iw_ratio/np.max(tip_iw_ratio) - 1
+    # # Adjust curvature
+    # avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
+    # tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
+    # if np.max(tip_iw_ratio) > avg_iw_ratio:
+    #     k_diff = avg_iw_ratio/np.max(tip_iw_ratio) - 1
+    # else:
+    #     k_diff = avg_iw_ratio / np.min(tip_iw_ratio) - 1
+
+    # Adjust curvature (method 2)
+    dy = 5  # averaging box size in number of pixels
+    ice_tip_widths = [np.max(ice_edges[np.abs(ice_edges[:, 1] - j) < dy, 0]) - np.min(ice_edges[np.abs(ice_edges[:, 1] - j) < dy, 0])
+                      for j in range(int(0.9 * tip_y), tip_y)]
+    mask_tip_widths = [np.max(mask_edges[np.abs(mask_edges[:, 1] - j) < dy, 0]) - np.min(mask_edges[np.abs(mask_edges[:, 1] - j) < dy, 0])
+                       for j in range(int(0.9 * tip_y), tip_y)]
+
+    tip_widths_diff = np.array(mask_tip_widths) - np.array(ice_tip_widths)
+    # prioritize fixing a white space that is too small
+    if abs(np.min(tip_widths_diff) - w_diff) > k_thresh:
+        k_diff = np.min(tip_widths_diff) - w_diff
     else:
-        k_diff = avg_iw_ratio / np.min(tip_iw_ratio) - 1
+        k_diff = np.max(tip_widths_diff) - w_diff
 
     # Make action list
     if abs(x_diff) > x_thresh:
@@ -257,14 +278,23 @@ def cv_window():
 
 
 def fake_img(cyl, n=0):
-    arr = np.load('test_data/test_data7.npy')
-    n = min(n, arr.shape[-1]-1)
-    ice = arr[:, :, n]
+    # return np.flipud(np.transpose(plt.imread('/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128' + '/jpg/IMG_{:05d}.jpg'.format(n+9)), (1, 0, 2)))
+
+    files = sorted(glob('auto_contours/ice_contours20241128_104800/*.npy'))
+    n = min(len(files)-1, n)
+    c = np.load(files[n])
+
+    ice = 255 * np.ones((4128, 2752), np.uint8)
+    ice = cv.fillPoly(ice, [c.astype(np.int32)], (0, 0, 0))
+
+    # arr = np.load('test_data/test_data7.npy')
+    # n = min(n//2, arr.shape[-1]-1)
+    # ice = arr[:, :, n]
     screen = cv.cvtColor(cyl.get_img(), cv.COLOR_RGB2GRAY)
-    img = cv.resize(screen, (2 * cyl.resolution[0], 2*cyl.resolution[1]))
-    ice = cv.resize(ice, (2*ice.shape[1], 2*ice.shape[0]))
-    h, w = ice.shape
-    img[:h, (img.shape[1]//2-w//2):(img.shape[1]//2-w//2+w)] -= np.flipud(ice)
+    screen = cv.resize(screen, (ice.shape[1], ice.shape[0]))
+
+    ice[screen == 0] = 0
+    img = ice
 
     # Triangle
     # img = cv.fillPoly(img, [np.fliplr(np.array([[0, 1850], [0, 2150], [900, 2000], [0, 1850]]))], color=(0, 0, 0))
