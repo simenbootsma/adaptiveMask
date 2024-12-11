@@ -2,17 +2,27 @@ import flet as ft
 import os
 import numpy as np
 import time
+from glob import glob
 
 
 # TODO:
+#   - Last update time
 #   - Implement writing with GUI
 #   - Implement changing thresholds
 #   - Live images
 #   - Graph with parameters
 
+FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241211/"  # must contain jpg, updates, commands folders
+update_paths = glob(FOLDER + "updates/*.txt")
+WINDOW_OPEN = True
+
 
 def main(page: ft.Page):
+    global update_paths, WINDOW_OPEN
     # FUNCTIONALITY
+
+    def quit_program():
+        WINDOW_OPEN = False
 
     # Dashboard
     def pick_folder_result(e: ft.FilePickerResultEvent):
@@ -85,13 +95,15 @@ def main(page: ft.Page):
 
     page.add(t)
     page.window.height = 800
+    page.on_close = quit_program
     page.update()
 
-    # cboard.update(r'update_example.txt')
-    for i in range(12, 100):
-        cboard.update(r'C:\Users\Simen\OneDrive - University of Twente\VC_coldroom\ColdVC_20241128\updates/update_{:04d}.txt'.format(i))
-        time.sleep(1)
-
+    while WINDOW_OPEN:
+        new_files = [fn for fn in glob(FOLDER + "updates/*.txt") if fn not in update_paths]
+        if len(new_files) > 0:
+            cboard.update(new_files[-1])
+            update_paths += new_files
+        time.sleep(.1)
 
 class ControlBoard:
     def __init__(self):
