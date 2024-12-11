@@ -6,7 +6,6 @@ from glob import glob
 
 
 # TODO:
-#   - Last update time
 #   - Implement writing with GUI
 #   - Implement changing thresholds
 #   - Live images
@@ -22,6 +21,7 @@ def main(page: ft.Page):
     # FUNCTIONALITY
 
     def quit_program():
+        global WINDOW_OPEN
         WINDOW_OPEN = False
 
     # Dashboard
