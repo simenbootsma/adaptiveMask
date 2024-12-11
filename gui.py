@@ -2,6 +2,7 @@ import flet as ft
 import os
 import numpy as np
 import time
+import matplotlib.pyplot as plt
 
 
 # TODO:
@@ -31,7 +32,17 @@ def main(page: ft.Page):
     row_h = 25  # row height for control tab
     col_w = 100  # column width for control tab
     params = ['position', 'width', 'height', 'curvature']
+    last_update_text = ft.Text("Last update: -",)
 
+    plt.imsave('temp_imgs/dashboard_img.jpg', np.zeros((1000, 400, 3), dtype=np.uint8))
+    live_image = ft.Image(
+        src="temp_imgs/dashboard_img.jpg",
+        width=300,
+        height=600,
+        fit=ft.ImageFit.FIT_HEIGHT,
+        repeat=ft.ImageRepeat.NO_REPEAT,
+        border_radius=ft.border_radius.all(10),
+    )
 
     t = ft.Tabs(
         selected_index=0,
@@ -41,14 +52,17 @@ def main(page: ft.Page):
                 text="Dashboard",
                 icon=ft.icons.DASHBOARD,
                 content=ft.Container(
-                    ft.SafeArea(ft.Column([
-                        ft.Row([
-                            ft.ElevatedButton(text='Choose data folder', icon=ft.icons.FOLDER,
-                                              on_click=lambda _: data_folder_picker.get_directory_path()),
-                            data_folder
-                        ]),
-                        ft.TextField(label="Save filename", hint_text='save_name', suffix_text='.txt', width=200)
-                    ], spacing=10)), margin=20
+                    ft.SafeArea(ft.Row([
+                        ft.Column([
+                            ft.Row([
+                                ft.ElevatedButton(text='Choose data folder', icon=ft.icons.FOLDER,
+                                                  on_click=lambda _: data_folder_picker.get_directory_path()),
+                                data_folder
+                            ]),
+                            ft.TextField(label="Save filename", hint_text='save_name', suffix_text='.txt', width=200)
+                        ], spacing=10),
+                        ft.Column([last_update_text, live_image]),
+                    ], spacing=50)), margin=20
                 ),
             ),
             ft.Tab(
@@ -56,6 +70,7 @@ def main(page: ft.Page):
                 icon=ft.icons.CONTROL_CAMERA,
                 content=ft.Container(
                     ft.SafeArea(ft.Column([
+                        ft.Row([last_update_text]),
                         ft.Row([
                             ft.Column([ft.Text(""), ft.Text("Position", weight=ft.FontWeight.BOLD), ft.Text("Width", weight=ft.FontWeight.BOLD), ft.Text("Height", weight=ft.FontWeight.BOLD), ft.Text("Curvature", weight=ft.FontWeight.BOLD)], spacing=row_h, alignment=ft.alignment.center, width=col_w),
                             ft.Column([ft.Text("Current value", text_align=ft.TextAlign.CENTER, width=int(1.7*col_w), weight=ft.FontWeight.BOLD)] + [ft.Row([cboard.buttons[k + '_minus'], cboard.texts[k+'_current'], cboard.buttons[k + '_plus']], spacing=0, height=row_h-5, alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
@@ -85,12 +100,28 @@ def main(page: ft.Page):
 
     page.add(t)
     page.window.height = 600
+    page.window.width = 1200
     page.update()
 
     # cboard.update(r'update_example.txt')
     for i in range(12, 100):
-        cboard.update(r'/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/updates/update_{:04d}.txt'.format(i))
-        time.sleep(1)
+        fname = r'/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/updates/update_{:04d}.txt'.format(i)
+        cboard.update(fname.format(i))
+        dt = time.time() - os.path.getmtime(fname)
+        if dt > 3600:
+            t_str = '{:.0f} hours'.format(dt // 3600)
+        elif dt > 60:
+            t_str = '{:.0f} minutes'.format(dt // 60)
+        else:
+            t_str = '{:.0f} seconds'.format(dt)
+        last_update_text.value = 'Last update: {:s} ago'.format(t_str)
+        last_update_text.update()
+
+        img_name = r'/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/jpg/IMG_{:05d}.jpg'.format(i)
+        live_image.src = img_name
+        live_image.update()
+
+        time.sleep(2)
 
 
 class ControlBoard:
