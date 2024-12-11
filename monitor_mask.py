@@ -1,12 +1,16 @@
 import time
 import numpy as np
-import matplotlib.pyplot as plt
+
 from glob import glob
 from datetime import datetime
 import cv2 as cv
+import matplotlib
+matplotlib.use('tkagg')
+import matplotlib.pyplot as plt
+#['gtk3agg', 'gtk3cairo', 'gtk4agg', 'gtk4cairo', 'macosx', 'nbagg', 'notebook', 'qtagg', 'qtcairo', 'qt5agg', 'qt5cairo', 'tkagg', 'tkcairo', 'webagg', 'wx', 'wxagg', 'wxcairo', 'agg', 'cairo', 'pdf', 'pgf', 'ps', 'svg', 'template']
 
 
-FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/"  # must contain jpg, updates, commands folders
+FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241211/"  # must contain jpg, updates, commands folders
 update_paths = glob(FOLDER + "updates/*.txt")
 
 
@@ -48,7 +52,7 @@ def main():
 
 def find_mask_and_ice(img):
     # assumes gray image
-    ret, otsu = cv.threshold(img.astype(np.uint8), 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+    ret, otsu = cv.threshold(img.astype(np.uint8), 0, 1, cv.THRESH_BINARY + cv.THRESH_OTSU)
 
     s0, s1 = otsu.shape
     mask = np.zeros(otsu.shape)
@@ -59,7 +63,7 @@ def find_mask_and_ice(img):
             empty_mat = np.zeros((s0 + 2, s1 + 2), dtype=np.uint8)
             _, _, m, _ = cv.floodFill(otsu.copy(), empty_mat, (j, i), 0)
             mask[m[1:-1, 1:-1] == 1] = 1
-    ice = (1 - otsu.copy()/255)
+    ice = 1 - otsu
     ice[mask==1] = 0
     return mask, ice
 
