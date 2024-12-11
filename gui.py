@@ -3,7 +3,8 @@ import os
 import numpy as np
 import time
 from glob import glob
-import matplotlib.pyplot as plt
+import cv2 as cv
+from monitor_mask import find_mask_and_ice, find_edges
 
 
 # TODO:
@@ -14,11 +15,12 @@ import matplotlib.pyplot as plt
 
 FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241211/"  # must contain jpg, updates, commands folders
 update_paths = glob(FOLDER + "updates/*.txt")
+image_paths = glob(FOLDER + "jpg/*.jpg")
 WINDOW_OPEN = True
 
 
 def main(page: ft.Page):
-    global update_paths, WINDOW_OPEN
+    global update_paths, image_paths, WINDOW_OPEN, FOLDER
     # FUNCTIONALITY
 
     def quit_program():
@@ -27,12 +29,41 @@ def main(page: ft.Page):
 
     # Dashboard
     def pick_folder_result(e: ft.FilePickerResultEvent):
+        global FOLDER, update_paths, image_paths
         data_folder.value = e.path
         data_folder.update()
+        FOLDER = e.path
+        update_paths = glob(FOLDER + "updates/*.txt")
+        image_paths = glob(FOLDER + "jpg/*.jpg")
 
-    data_folder = ft.Text(os.getcwd())
+    data_folder = ft.Text(FOLDER)
     data_folder_picker = ft.FilePicker(on_result=pick_folder_result)
     page.overlay.append(data_folder_picker)
+
+    live_image = ft.Image(
+        src="",
+        width=300,
+        height=600,
+        fit=ft.ImageFit.FIT_HEIGHT,
+        repeat=ft.ImageRepeat.NO_REPEAT,
+        border_radius=ft.border_radius.all(10),
+    )
+
+    def toggle_contour(e):
+        if len(image_paths) == 0:
+            return
+        if live_image.src == '_temp_dashboard_image.jpg':
+            live_image.src = image_paths[-1]
+        else:
+            img = cv.imread(image_paths[-1])
+            gray_img = np.mean(img, axis=2).astype(np.uint8)
+            contour = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
+            img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=40)
+            cv.imwrite('_temp_dashboard_image.jpg', img)
+            live_image.src = '_temp_dashboard_image.jpg'
+        live_image.update()
+
+    contour_checkbox = ft.Checkbox(label='Show contour', on_change=toggle_contour)
 
     # Controls
     cboard = ControlBoard()
@@ -43,16 +74,7 @@ def main(page: ft.Page):
     col_w = 100  # column width for control tab
     params = ['position', 'width', 'height', 'curvature']
     last_update_text = ft.Text("Last update: -",)
-
-    plt.imsave('temp_imgs/dashboard_img.jpg', np.zeros((1000, 400, 3), dtype=np.uint8))
-    live_image = ft.Image(
-        src="temp_imgs/dashboard_img.jpg",
-        width=300,
-        height=600,
-        fit=ft.ImageFit.FIT_HEIGHT,
-        repeat=ft.ImageRepeat.NO_REPEAT,
-        border_radius=ft.border_radius.all(10),
-    )
+    last_image_text = ft.Text("Last update: -", )
 
     t = ft.Tabs(
         selected_index=0,
@@ -69,9 +91,8 @@ def main(page: ft.Page):
                                                   on_click=lambda _: data_folder_picker.get_directory_path()),
                                 data_folder
                             ]),
-                            ft.TextField(label="Save filename", hint_text='save_name', suffix_text='.txt', width=200)
                         ], spacing=10),
-                        ft.Column([last_update_text, live_image]),
+                        ft.Column([last_image_text, contour_checkbox, live_image]),
                     ], spacing=50)), margin=20
                 ),
             ),
@@ -109,37 +130,48 @@ def main(page: ft.Page):
     )
 
     page.add(t)
-    page.window.height = 800
     page.on_close = quit_program
-    page.window.height = 600
+    page.window.height = 800
     page.window.width = 1200
     page.update()
 
+    last_update_time = None
     while WINDOW_OPEN:
-        new_files = [fn for fn in glob(FOLDER + "updates/*.txt") if fn not in update_paths]
-        if len(new_files) > 0:
-            cboard.update(new_files[-1])
-            update_paths += new_files
+        new_updates = [fn for fn in glob(FOLDER + "updates/*.txt") if fn not in update_paths]
+        new_images = [fn for fn in glob(FOLDER + "jpg/*.jpg") if fn not in image_paths]
+
+        if last_update_time is None and len(update_paths) > 0 and len(image_paths) > 0:
+            cboard.update(update_paths[-1])
+            last_update_time = os.path.getmtime(update_paths[-1])
+            live_image.src = image_paths[-1]
+            live_image.update()
+
+        if len(new_updates) > 0:
+            cboard.update(new_updates[-1])
+            last_update_time = os.path.getmtime(new_updates[-1])
+
+        if len(new_images) > 0:
+            show_contours = live_image.src == '_temp_dashboard_image.jpg'
+            live_image.src = new_images[-1]
+            if show_contours:
+                toggle_contour(None)
+            live_image.update()
+            image_paths += new_images
+
+        if last_update_time is not None:
+            dt = time.time() - last_update_time
+            if dt > 3600:
+                t_str = '{:.0f} hours'.format(dt // 3600)
+            elif dt > 60:
+                t_str = '{:.0f} minutes'.format(dt // 60)
+            else:
+                t_str = '{:.0f} seconds'.format(dt)
+            last_update_text.value = 'Last update: {:s} ago'.format(t_str)
+            last_update_text.update()
+            last_image_text.value = 'Last update: {:s} ago'.format(t_str)
+            last_image_text.update()
+
         time.sleep(.1)
-    # cboard.update(r'update_example.txt')
-    for i in range(12, 100):
-        fname = r'/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/updates/update_{:04d}.txt'.format(i)
-        cboard.update(fname.format(i))
-        dt = time.time() - os.path.getmtime(fname)
-        if dt > 3600:
-            t_str = '{:.0f} hours'.format(dt // 3600)
-        elif dt > 60:
-            t_str = '{:.0f} minutes'.format(dt // 60)
-        else:
-            t_str = '{:.0f} seconds'.format(dt)
-        last_update_text.value = 'Last update: {:s} ago'.format(t_str)
-        last_update_text.update()
-
-        img_name = r'/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/jpg/IMG_{:05d}.jpg'.format(i)
-        live_image.src = img_name
-        live_image.update()
-
-        time.sleep(2)
 
 
 class ControlBoard:
