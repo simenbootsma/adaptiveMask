@@ -10,8 +10,8 @@ from monitor_mask import find_mask_and_ice, find_edges
 # TODO:
 #   - Implement writing with GUI
 #   - Implement changing thresholds
-#   - Live images
 #   - Graph with parameters
+#   - Live blinker
 
 FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241211/"  # must contain jpg, updates, commands folders
 update_paths = glob(FOLDER + "updates/*.txt")
@@ -22,6 +22,7 @@ WINDOW_OPEN = True
 def main(page: ft.Page):
     global update_paths, image_paths, WINDOW_OPEN, FOLDER
     # FUNCTIONALITY
+    params = ['position', 'width', 'height', 'curvature']  # parameters that will be shown
 
     def quit_program():
         global WINDOW_OPEN
@@ -72,9 +73,12 @@ def main(page: ft.Page):
     # LAYOUT
     row_h = 25  # row height for control tab
     col_w = 100  # column width for control tab
-    params = ['position', 'width', 'height', 'curvature']
     last_update_text = ft.Text("Last update: -",)
     last_image_text = ft.Text("Last update: -", )
+    run_time_text = ft.Text("Run time     --:--:--", size=30, weight=ft.FontWeight.W_300)
+    status_boxes = {k: [ft.Container(width=40, height=40, visible=False, border_radius=3, border=ft.border.all(2, ft.colors.GREEN_50))] + [ft.Container(width=30, height=30, visible=False, border_radius=3) for _ in range(cboard.BUFFER_SIZE-1)] for k in params}
+    status_rows = [ft.Row([ft.Container(ft.Text(k, size=20, weight=ft.FontWeight.BOLD), width=100, height=50, alignment=ft.Alignment(-1, 0))] + status_boxes[k], spacing=20) for k in params]
+    status_rows.insert(0, ft.Row([ft.Container(width=100, height=50), ft.Icon(ft.icons.ARROW_BACK), ft.Container(ft.Text("time", size=20, weight=ft.FontWeight.BOLD), alignment=ft.Alignment(-1, 0))], spacing=20))
 
     t = ft.Tabs(
         selected_index=0,
@@ -91,11 +95,13 @@ def main(page: ft.Page):
                                                   on_click=lambda _: data_folder_picker.get_directory_path()),
                                 data_folder
                             ]),
-                        ], spacing=10),
+                            run_time_text
+                        ] + status_rows, spacing=10),
                         ft.Column([last_image_text, contour_checkbox, live_image]),
                     ], spacing=50)), margin=20
                 ),
             ),
+
             ft.Tab(
                 text="Controls",
                 icon=ft.icons.CONTROL_CAMERA,
@@ -136,6 +142,7 @@ def main(page: ft.Page):
     page.update()
 
     last_update_time = None
+    start_time = None
     while WINDOW_OPEN:
         new_updates = [fn for fn in glob(FOLDER + "updates/*.txt") if fn not in update_paths]
         new_images = [fn for fn in glob(FOLDER + "jpg/*.jpg") if fn not in image_paths]
@@ -143,12 +150,23 @@ def main(page: ft.Page):
         if last_update_time is None and len(update_paths) > 0 and len(image_paths) > 0:
             cboard.update(update_paths[-1])
             last_update_time = os.path.getmtime(update_paths[-1])
+            start_time = os.path.getmtime(update_paths[0])
             live_image.src = image_paths[-1]
             live_image.update()
 
         if len(new_updates) > 0:
             cboard.update(new_updates[-1])
             last_update_time = os.path.getmtime(new_updates[-1])
+
+            # Update status boxes
+            for k in params:
+                for i in range(len(cboard.rel_error_history[k])):
+                    err = cboard.rel_error_history[k][i]
+                    status_boxes[k][i].visible = True
+                    status_boxes[k][i].bgcolor = ft.colors.RED_300 if abs(err) >= 2 else ft.colors.AMBER_300 if abs(
+                        err) >= 1 else ft.colors.GREEN_300
+                    status_boxes[k][i].update()
+            update_paths += new_updates
 
         if len(new_images) > 0:
             show_contours = live_image.src == '_temp_dashboard_image.jpg'
@@ -171,6 +189,10 @@ def main(page: ft.Page):
             last_image_text.value = 'Last update: {:s} ago'.format(t_str)
             last_image_text.update()
 
+            rt = int(time.time() - start_time)
+            run_time_text.value = 'Run time     {:02d}:{:02d}:{:02d}'.format(rt//3600, (rt//60) % 60, rt % 60)
+            run_time_text.update()
+
         time.sleep(.1)
 
 
@@ -186,6 +208,8 @@ class ControlBoard:
         self.is_threshold_changed = {k: False for k in self.parameters}
         self.buttons = self.init_buttons()
         self.texts = self.init_texts()
+        self.BUFFER_SIZE = 10  # number of values to remember
+        self.rel_error_history = {k: [] for k in self.parameters}
 
     def init_buttons(self):
         minus_button_style = {'icon': ft.icons.REMOVE}
@@ -250,6 +274,9 @@ class ControlBoard:
             self.thresholds[k2] = np.abs(err_dct[k][0]/err_dct[k][1])  # TODO: pass threshold directly
             if not self.is_threshold_changed[k2] or self.display_thresholds[k2] == self.thresholds[k2]:
                 self.display_thresholds[k2] = np.abs(err_dct[k][0]/err_dct[k][1])
+            self.rel_error_history[k2].insert(0, err_dct[k][1])
+            if len(self.rel_error_history[k2]) > self.BUFFER_SIZE:
+                self.rel_error_history[k2].pop()
 
         self.update_texts()
 
@@ -463,7 +490,9 @@ def val_from_text(s):
 
 def str_to_tuple(s):
     v1, v2 = s.split(', ')
-    return float(v1[1:]), float(v2[:-1])
+    v1 = np.nan if v1[1:] == 'na' else float(v1[1:])
+    v2 = np.nan if v2[:-1] == 'na' else float(v2[:-1])
+    return v1, v2
 
 
 ft.app(main)
