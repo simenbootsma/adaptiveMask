@@ -52,7 +52,7 @@ def main():
 
 def find_mask_and_ice(img):
     # assumes gray image
-    ret, otsu = cv.threshold(img.astype(np.uint8), 0, 1, cv.THRESH_BINARY + cv.THRESH_OTSU)
+    ret, otsu = cv.threshold(img.astype(np.uint8), 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
 
     s0, s1 = otsu.shape
     mask = np.zeros(otsu.shape)
@@ -63,7 +63,7 @@ def find_mask_and_ice(img):
             empty_mat = np.zeros((s0 + 2, s1 + 2), dtype=np.uint8)
             _, _, m, _ = cv.floodFill(otsu.copy(), empty_mat, (j, i), 0)
             mask[m[1:-1, 1:-1] == 1] = 1
-    ice = 1 - otsu
+    ice = (1 - otsu/255).astype(np.uint8)
     ice[mask==1] = 0
     return mask, ice
 
