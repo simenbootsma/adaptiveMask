@@ -1,7 +1,7 @@
 from glob import glob
 
 
-FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241127_snow1/"  # must contain jpg, updates, commands folders
+FOLDER = "/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241212/"  # must contain jpg, updates, commands folders
 
 N = len(glob(FOLDER + "commands/*.txt"))
 command = input("Write command here: ")
