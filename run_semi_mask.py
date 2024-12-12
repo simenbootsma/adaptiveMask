@@ -18,7 +18,7 @@ ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 PREV_CONTOUR_LENGTH = None
 
 THRESHOLDS = {
-    'x': 50,   # minimum difference in white area between left and right before moving laterally
+    'm': 50,   # minimum difference in white area between left and right before moving laterally
     'w': 300,  # maximum difference in mask and ice width in camera pixels
     'h': 200,  # maximum distance between mask and ice tip in camera pixels
     'k': 1,    # maximum difference in white area ratio between tip and full cylinder
@@ -26,6 +26,7 @@ THRESHOLDS = {
 
 
 def main(save_contours=True):
+    global THRESHOLDS
     # initialize
     cyl = Cylinder(resolution=(1920, 1080))
     cyl.sensitivity = 10  # sensitivity in screen pixels
@@ -80,7 +81,7 @@ def main(save_contours=True):
 
         try:
             # check for external commands and update screen
-            command_files = [fpath for fpath in glob(ONEDRIVE_FOLDER + 'commands/*.txt') if fpath not in command_paths]
+            command_files = [fpath for fpath in sorted(glob(ONEDRIVE_FOLDER + 'commands/*.txt')) if fpath not in command_paths]
             command_actions = []
             for cf in command_files:
                 print('received file!')
@@ -92,7 +93,19 @@ def main(save_contours=True):
             for a in command_actions:
                 if len(a) > 1 and len(a[0]) > 1 and a[0][1] == 't':
                     THRESHOLDS[a[0][0]] = a[1]
-                cyl.handle_key(a)
+                    print('changed threshold')
+                elif len(a) > 1:
+                    match a[0]:
+                        case 'm':
+                            cyl.set_center(int(a[1]))
+                        case 'w':
+                            cyl.set_width(int(a[1]))
+                        case 'h':
+                            cyl.set_height(int(a[1]))
+                        case 'k':
+                            cyl.set_curvature(a[1])
+                else:
+                    cyl.handle_key(a)
             log_actions(log_file, command_actions, auto=False)
         except:
             print("An error occurred in updating the mask via commands")
@@ -219,8 +232,8 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     #     k_diff = np.max(tip_widths_diff) - w_diff
 
     # Make action list
-    if abs(x_diff) > THRESHOLDS['x']:
-        s = sensitivity_large if abs(x_diff) > 2 * THRESHOLDS['x'] else sensitivity_small
+    if abs(x_diff) > THRESHOLDS['m']:
+        s = sensitivity_large if abs(x_diff) > 2 * THRESHOLDS['m'] else sensitivity_small
         actions.append((ARROW_LEFT if x_diff > 0 else ARROW_RIGHT, s))
 
     if abs(w_diff) > THRESHOLDS['w']:
@@ -240,7 +253,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
         actions.append(("k" if k_diff > 0 else "K", s))
 
     err_str = [
-        " ok " if abs(x_diff) <= THRESHOLDS['x'] else "{:.02f}".format(x_diff / THRESHOLDS['x']),
+        " ok " if abs(x_diff) <= THRESHOLDS['m'] else "{:.02f}".format(x_diff / THRESHOLDS['m']),
         " ok " if abs(w_diff) <= THRESHOLDS['w'] else "{:.02f}".format(w_diff / THRESHOLDS['w']),
         " ok " if abs(h_diff) <= THRESHOLDS['h'] else "{:.02f}".format(h_diff / THRESHOLDS['h']),
         " ok " if abs(k_diff) <= THRESHOLDS['k'] else "{:.02f}".format(k_diff / THRESHOLDS['k']),
@@ -258,7 +271,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     print("\r"+count_str+" Errors  |  x: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
 
     if return_errors:
-        errors = {'x': (x_diff, THRESHOLDS['x']), 'w': (w_diff, THRESHOLDS['w']), 'h': (h_diff, THRESHOLDS['h']),
+        errors = {'x': (x_diff, THRESHOLDS['m']), 'w': (w_diff, THRESHOLDS['w']), 'h': (h_diff, THRESHOLDS['h']),
                   'k': (k_diff, THRESHOLDS['k'])}  # tuples of absolute errors and thresholds
         return actions, errors
     return actions
@@ -381,7 +394,8 @@ def read_command(filename):
         for ln in file.readlines():
             ln = ln.replace('\n', '')
             if '(' in ln:
-                ln = ln.replace('(', '').replace(')', '')
+                for c in "'()":
+                    ln = ln.replace(c, '')
                 key, val = ln.split(', ')
                 if key in allowed_actions:
                     actions.append((key, float(val)))
