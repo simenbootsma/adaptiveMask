@@ -69,6 +69,8 @@ def main(page: ft.Page):
     # Controls
     cboard = ControlBoard()
 
+    def save_changes(e):
+        cboard.submit(data_folder.value)
 
     # LAYOUT
     row_h = 25  # row height for control tab
@@ -126,7 +128,7 @@ def main(page: ft.Page):
                                 spacing=row_h, width=col_w)
                         ], spacing=5),
                         ft.Container(
-                            ft.Row([ft.ElevatedButton(text='Reset', on_click=cboard.reset), ft.ElevatedButton('Save changes', on_click=cboard.submit)]), margin=30
+                            ft.Row([ft.ElevatedButton(text='Reset', on_click=cboard.reset), ft.ElevatedButton('Save changes', on_click=save_changes)]), margin=30
                         )])
                     ), margin=20
                 ),
@@ -470,8 +472,21 @@ class ControlBoard:
             self.is_threshold_changed[k] = False
         self.update_texts()
 
-    def submit(self, e):
-        pass
+    def submit(self, folder):
+        kmap = {'width': 'w', 'height': 'h', 'position': 'm', 'curvature': 'k', 'blur': 'b', 'sensitivity': 's'}
+
+        n = len(glob(folder + "commands/*.txt"))
+        # command = input("Write command here: ")
+        actions = []
+        for p in self.parameters:
+            if self.is_changed[p]:
+                actions.append((kmap[p], self.display_values[p] - self.current_values[p]))
+            if self.is_threshold_changed[p]:
+                actions.append((kmap[p] + "t", self.display_thresholds[p] - self.thresholds[p]))
+        command = "\n".join([str(a) for a in actions])
+
+        with open(folder + "commands/command_{:04d}.txt".format(n), 'w') as f:
+            f.write(command)
 
 
 def val_from_text(s):

@@ -17,6 +17,13 @@ ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldro
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 PREV_CONTOUR_LENGTH = None
 
+THRESHOLDS = {
+    'x': 50,   # minimum difference in white area between left and right before moving laterally
+    'w': 300,  # maximum difference in mask and ice width in camera pixels
+    'h': 200,  # maximum distance between mask and ice tip in camera pixels
+    'k': 1,    # maximum difference in white area ratio between tip and full cylinder
+}
+
 
 def main(save_contours=True):
     # initialize
@@ -61,7 +68,7 @@ def main(save_contours=True):
             img_count += 1
 
             try:
-            # auto-update screen
+                # auto-update screen
                 auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
                 for a in auto_actions:
                     cyl.handle_key(a)
@@ -69,23 +76,26 @@ def main(save_contours=True):
                 if errors is not None and not DEMO:
                     give_update(errors, cyl, img_count)
             except:
-                print("An error occurred in updating the screen")
-                pass
+                print("An error occurred in auto-updating the screen")
 
-        # check for external commands and update screen
-        command_files = [fpath for fpath in glob(ONEDRIVE_FOLDER + 'commands/*.txt') if fpath not in command_paths]
-        command_actions = []
-        for cf in command_files:
-            print('received file!')
-            time.sleep(0.5)  # wait before reading to make sure file is closed
-            command_actions += list(open(cf, 'r').read())
-            command_paths.append(cf)
-        if len(command_actions) > 0:
-            print(command_actions)
-        command_actions = [ca for ca in command_actions if ca.lower() in 'swhkm']
-        for a in command_actions:
-            cyl.handle_key(a)
-        log_actions(log_file, command_actions, auto=False)
+        try:
+            # check for external commands and update screen
+            command_files = [fpath for fpath in glob(ONEDRIVE_FOLDER + 'commands/*.txt') if fpath not in command_paths]
+            command_actions = []
+            for cf in command_files:
+                print('received file!')
+                time.sleep(0.5)  # wait before reading to make sure file is closed
+                command_actions += read_command(cf)
+                command_paths.append(cf)
+            if len(command_actions) > 0:
+                print(command_actions)
+            for a in command_actions:
+                if len(a) > 1 and len(a[0]) > 1 and a[0][1] == 't':
+                    THRESHOLDS[a[0][0]] = a[1]
+                cyl.handle_key(a)
+            log_actions(log_file, command_actions, auto=False)
+        except:
+            print("An error occurred in updating the mask via commands")
 
         # handle key presses
         key = cv.waitKey(10)
@@ -108,7 +118,7 @@ def main(save_contours=True):
 
 
 def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False):
-    global PREV_CONTOUR_LENGTH
+    global PREV_CONTOUR_LENGTH, THRESHOLDS
 
     """ Find which buttons should be pressed to improve masking.
     NOTE: Assumes vertical cylinder suspended from the top.
@@ -117,10 +127,6 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     # settings
     sensitivity_small = 2
     sensitivity_large = 10
-    x_thresh = 50  # minimum difference in white area between left and right before moving laterally
-    w_thresh = 300  # maximum difference in mask and ice width in camera pixels
-    h_thresh = 200  # maximum distance between mask and ice tip in camera pixels
-    k_thresh = 1      # maximum deviation from width at bottom in camera pixels
 
     # setup
     actions = []
@@ -213,31 +219,31 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     #     k_diff = np.max(tip_widths_diff) - w_diff
 
     # Make action list
-    if abs(x_diff) > x_thresh:
-        s = sensitivity_large if abs(x_diff) > 2 * x_thresh else sensitivity_small
+    if abs(x_diff) > THRESHOLDS['x']:
+        s = sensitivity_large if abs(x_diff) > 2 * THRESHOLDS['x'] else sensitivity_small
         actions.append((ARROW_LEFT if x_diff > 0 else ARROW_RIGHT, s))
 
-    if abs(w_diff) > w_thresh:
+    if abs(w_diff) > THRESHOLDS['w']:
         # print(abs(w_diff) - w_thresh)
-        s = sensitivity_large if abs(w_diff) > 2 * w_thresh else sensitivity_small
+        s = sensitivity_large if abs(w_diff) > 2 * THRESHOLDS['w'] else sensitivity_small
         actions.append(("W" if w_diff > 0 else "w", s))
 
     changing_height = False
-    if abs(h_diff) > h_thresh:
+    if abs(h_diff) > THRESHOLDS['h']:
         # print(abs(h_diff) - h_thresh)
-        s = sensitivity_large if abs(h_diff) > 2 * h_thresh else sensitivity_small
+        s = sensitivity_large if abs(h_diff) > 2 * THRESHOLDS['h'] else sensitivity_small
         actions.append(("H" if h_diff > 0 else "h", s))
         changing_height = True
 
-    if abs(k_diff) > k_thresh and not changing_height:
-        s = sensitivity_large if abs(k_diff) > 2 * k_thresh else sensitivity_small
+    if abs(k_diff) > THRESHOLDS['k'] and not changing_height:
+        s = sensitivity_large if abs(k_diff) > 2 * THRESHOLDS['k'] else sensitivity_small
         actions.append(("k" if k_diff > 0 else "K", s))
 
     err_str = [
-        " ok " if abs(x_diff) <= x_thresh else "{:.02f}".format(x_diff / x_thresh),
-        " ok " if abs(w_diff) <= w_thresh else "{:.02f}".format(w_diff / w_thresh),
-        " ok " if abs(h_diff) <= h_thresh else "{:.02f}".format(h_diff / h_thresh),
-        " ok " if abs(k_diff) <= k_thresh else "{:.02f}".format(k_diff / k_thresh),
+        " ok " if abs(x_diff) <= THRESHOLDS['x'] else "{:.02f}".format(x_diff / THRESHOLDS['x']),
+        " ok " if abs(w_diff) <= THRESHOLDS['w'] else "{:.02f}".format(w_diff / THRESHOLDS['w']),
+        " ok " if abs(h_diff) <= THRESHOLDS['h'] else "{:.02f}".format(h_diff / THRESHOLDS['h']),
+        " ok " if abs(k_diff) <= THRESHOLDS['k'] else "{:.02f}".format(k_diff / THRESHOLDS['k']),
     ]
 
     # add colours
@@ -252,8 +258,8 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     print("\r"+count_str+" Errors  |  x: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
 
     if return_errors:
-        errors = {'x': (x_diff, x_diff/x_thresh), 'w': (w_diff, w_diff/w_thresh), 'h': (h_diff, h_diff/h_thresh),
-                  'k': (k_diff, k_diff/k_thresh)}  # tuples of absolute and relative errors
+        errors = {'x': (x_diff, THRESHOLDS['x']), 'w': (w_diff, THRESHOLDS['w']), 'h': (h_diff, THRESHOLDS['h']),
+                  'k': (k_diff, THRESHOLDS['k'])}  # tuples of absolute errors and thresholds
         return actions, errors
     return actions
 
@@ -365,6 +371,26 @@ def give_update(errors, cyl, img_count):
 
     f.write("\n".join(parameters + errors))
     f.close()
+
+
+def read_command(filename):
+    allowed_actions = [c for c in 'swhkmg'] + ['wt', 'ht', 'mt', 'kt']
+    actions = []
+    try:
+        file = open(filename, 'r')
+        for ln in file.readlines():
+            ln = ln.replace('\n', '')
+            if '(' in ln:
+                ln = ln.replace('(', '').replace(')', '')
+                key, val = ln.split(', ')
+                if key in allowed_actions:
+                    actions.append((key, float(val)))
+            else:
+                actions += [c for c in ln if c in allowed_actions]
+        file.close()
+    except:
+        print("Could not read command '{:s}'".format(filename))
+    return actions
 
 
 if __name__ == '__main__':
