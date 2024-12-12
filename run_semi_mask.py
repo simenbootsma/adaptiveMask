@@ -12,9 +12,10 @@ import shutil
 matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
-IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241210/'  # folder where images ares saved
-ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241210/'  # folder for communicating with external computer
+IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241212/'  # folder where images ares saved
+ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241212/'  # folder for communicating with external computer
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
+PREV_CONTOUR_LENGTH = None
 
 
 def main(save_contours=True):
@@ -60,7 +61,7 @@ def main(save_contours=True):
             img_count += 1
 
             try:
-                # auto-update screen
+            # auto-update screen
                 auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
                 for a in auto_actions:
                     cyl.handle_key(a)
@@ -107,6 +108,8 @@ def main(save_contours=True):
 
 
 def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False):
+    global PREV_CONTOUR_LENGTH
+
     """ Find which buttons should be pressed to improve masking.
     NOTE: Assumes vertical cylinder suspended from the top.
     Saves ice contours in save_folder. """
@@ -129,11 +132,13 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     ice_edges = find_edges(ice, largest_only=True)
     mask_edges = find_edges(mask, remove_outside=True)
 
-    if ice_edges is None:
+    if ice_edges is None or (PREV_CONTOUR_LENGTH is not None and len(ice_edges) < PREV_CONTOUR_LENGTH/4):
         print("[compute_actions]: no ice detected")
         if return_errors:
             return ['w', 'h', 'K'], None
         return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
+
+    PREV_CONTOUR_LENGTH = len(ice_edges)
 
     if save_folder is not None:
         # Save ice contour
