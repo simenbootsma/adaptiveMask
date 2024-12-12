@@ -114,13 +114,14 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     # settings
     sensitivity_small = 2
     sensitivity_large = 10
-    x_thresh = 0.1  # minimum difference in white area between left and right before moving laterally
+    x_thresh = 50  # minimum difference in white area between left and right before moving laterally
     w_thresh = 300  # maximum difference in mask and ice width in camera pixels
     h_thresh = 200  # maximum distance between mask and ice tip in camera pixels
-    k_thresh = 50      # maximum deviation from width at bottom in camera pixels
+    k_thresh = 1      # maximum deviation from width at bottom in camera pixels
 
     # setup
     actions = []
+    # img = img[:, 500:-500]
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
     img[:10, :] = 255  # make top edge white, assuming ice object suspended from top
     mask, ice = find_mask_and_ice(img)
@@ -142,43 +143,69 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
 
     M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
 
-    # Move left/right?
-    cx = int(np.mean(ice_edges[:, 0]))
-    x_diff = (np.sum(M[:, cx:]) - np.sum(M[:, :cx]))/np.sum(M)  # normalised difference in white area between left and right side of the cylinder
+    # # Move left/right?
+    # cx = int(np.mean(ice_edges[:, 0]))
+    # x_diff = (np.sum(M[:, cx:]) - np.sum(M[:, :cx]))/np.sum(M)  # normalised difference in white area between left and right side of the cylinder
+    #
+    # # Adjust width
+    # min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
+    # sorted_ice_edges_x = np.sort(ice_edges[:, 0])
+    # max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
+    # max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
+    # w_diff = max_width_mask - max_width
 
-    # Adjust width
-    min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
-    sorted_ice_edges_x = np.sort(ice_edges[:, 0])
-    max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
-    max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
-    w_diff = max_width_mask - max_width
+    # Adjust width 2
+    xmean_ice = np.mean(ice_edges[:, 0])
+    dy = 10  # bin size in pixels
+    ice_bins = [ice_edges[np.abs(ice_edges[:, 1] - j * dy) <= dy / 2, :] for j in range(int(img.shape[0] / dy))]
+    ice_bins = [[b[b[:, 0] < xmean_ice], b[b[:, 0] > xmean_ice]] for b in ice_bins]  # split into left and right
+    ice_widths = [np.nan if (len(rb) == 0 or len(lb) == 0) else np.max(rb[:, 0]) - np.min(lb[:, 0]) for lb, rb in
+                  ice_bins]
+    mask_bins = [mask_edges[np.abs(mask_edges[:, 1] - j * dy) <= dy / 2, :] for j in range(int(img.shape[0] / dy))]
+    mask_bins = [[b[b[:, 0] < xmean_ice], b[b[:, 0] > xmean_ice]] for b in mask_bins]  # split into left and right
+    mask_widths = [np.nan if (len(rb) == 0 or len(lb) == 0) else np.max(rb[:, 0]) - np.min(lb[:, 0]) for lb, rb in
+                   mask_bins]
+
+    width_diffs = np.array(mask_widths) - np.array(ice_widths)
+    width_diffs = width_diffs[~np.isnan(width_diffs)]
+    w_diff = np.sort(width_diffs)[int(.02 * len(width_diffs))]  # take value at 2% instead of min to ignore extreme values
+
+    # Adjust position 2
+    white_space_left = [np.nan if (len(ice_bins[j][0]) == 0 or len(mask_bins[j][0]) == 0)
+                        else np.abs(np.min(ice_bins[j][0][:, 0]) - np.min(mask_bins[j][0][:, 0]))
+                        for j in range(len(ice_bins))]
+    white_space_right = [np.nan if (len(ice_bins[j][1]) == 0 or len(mask_bins[j][1]) == 0)
+                         else np.abs(np.min(ice_bins[j][1][:, 0]) - np.min(mask_bins[j][1][:, 0]))
+                         for j in range(len(ice_bins))]
+    x_diff = np.nanmean(white_space_right) - np.nanmean(white_space_left)
 
     # Adjust height
+    min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
     tip_y = int(np.mean(np.sort(ice_edges[:, 1])[max_ind:]))
     mask_tip_y = np.max(mask_edges[:, 1])
     h_diff = mask_tip_y - tip_y
 
-    # # Adjust curvature
-    # avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
-    # tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
-    # if np.max(tip_iw_ratio) > avg_iw_ratio:
-    #     k_diff = avg_iw_ratio/np.max(tip_iw_ratio) - 1
-    # else:
-    #     k_diff = avg_iw_ratio / np.min(tip_iw_ratio) - 1
-
-    # Adjust curvature (method 2)
-    dy = 5  # averaging box size in number of pixels
-    ice_tip_widths = [np.max(ice_edges[np.abs(ice_edges[:, 1] - j) < dy, 0]) - np.min(ice_edges[np.abs(ice_edges[:, 1] - j) < dy, 0])
-                      for j in range(int(0.9 * tip_y), tip_y)]
-    mask_tip_widths = [np.max(mask_edges[np.abs(mask_edges[:, 1] - j) < dy, 0]) - np.min(mask_edges[np.abs(mask_edges[:, 1] - j) < dy, 0])
-                       for j in range(int(0.9 * tip_y), tip_y)]
-
-    tip_widths_diff = np.array(mask_tip_widths) - np.array(ice_tip_widths)
-    # prioritize fixing a white space that is too small
-    if abs(np.min(tip_widths_diff) - w_diff) > k_thresh:
-        k_diff = np.min(tip_widths_diff) - w_diff
+    # Adjust curvature
+    avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
+    tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
+    if np.max(tip_iw_ratio) > avg_iw_ratio:
+        k_diff = avg_iw_ratio/np.max(tip_iw_ratio) - 1
     else:
-        k_diff = np.max(tip_widths_diff) - w_diff
+        k_diff = avg_iw_ratio / np.min(tip_iw_ratio) - 1
+
+    # # Adjust curvature (method 2)
+    # dy = 5  # averaging box size in number of pixels
+    # ice_tip_widths = [np.max(ice_edges[np.abs(ice_edges[:, 1] - j) < dy, 0]) - np.min(ice_edges[np.abs(ice_edges[:, 1] - j) < dy, 0])
+    #                   for j in range(int(0.9 * tip_y), tip_y)]
+    # mask_tip_widths = [np.max(mask_edges[np.abs(mask_edges[:, 1] - j) < dy, 0]) - np.min(mask_edges[np.abs(mask_edges[:, 1] - j) < dy, 0])
+    #                    for j in range(int(0.9 * tip_y), tip_y)]
+    #
+    # tip_widths_diff = np.array(mask_tip_widths) - np.array(ice_tip_widths)
+    # # prioritize fixing a white space that is too small
+    # if abs(np.min(tip_widths_diff) - w_diff) > k_thresh:
+    #     k_diff = np.min(tip_widths_diff) - w_diff
+    # else:
+    #     k_diff = np.max(tip_widths_diff) - w_diff
 
     # Make action list
     if abs(x_diff) > x_thresh:
