@@ -70,7 +70,14 @@ def main(page: ft.Page):
     cboard = ControlBoard()
 
     def save_changes(e):
+        save_button.disabled = True
+        save_button.update()
         cboard.submit(data_folder.value)
+        time.sleep(2)
+        save_button.disabled = False
+        save_button.update()
+
+    save_button = ft.ElevatedButton('Save changes', on_click=save_changes)
 
     # LAYOUT
     row_h = 25  # row height for control tab
@@ -128,7 +135,7 @@ def main(page: ft.Page):
                                 spacing=row_h, width=col_w)
                         ], spacing=5),
                         ft.Container(
-                            ft.Row([ft.ElevatedButton(text='Reset', on_click=cboard.reset), ft.ElevatedButton('Save changes', on_click=save_changes)]), margin=30
+                            ft.Row([ft.ElevatedButton(text='Reset', on_click=cboard.reset), save_button]), margin=30
                         )])
                     ), margin=20
                 ),
@@ -475,7 +482,7 @@ class ControlBoard:
     def submit(self, folder):
         kmap = {'width': 'w', 'height': 'h', 'position': 'm', 'curvature': 'k', 'blur': 'b', 'sensitivity': 's'}
 
-        n = len(glob(folder + "commands/*.txt"))
+        n = len(glob(folder + "/commands/*.txt"))
         # command = input("Write command here: ")
         actions = []
         for p in self.parameters:
@@ -485,7 +492,7 @@ class ControlBoard:
                 actions.append((kmap[p] + "t", self.display_thresholds[p] - self.thresholds[p]))
         command = "\n".join([str(a) for a in actions])
 
-        with open(folder + "commands/command_{:04d}.txt".format(n), 'w') as f:
+        with open(folder + "/commands/command_{:04d}.txt".format(n), 'w') as f:
             f.write(command)
 
 
