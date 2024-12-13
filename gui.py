@@ -125,8 +125,13 @@ def main(page: ft.Page):
                             ft.Column([ft.Text(""), ft.Text("Position", weight=ft.FontWeight.BOLD), ft.Text("Width", weight=ft.FontWeight.BOLD), ft.Text("Height", weight=ft.FontWeight.BOLD), ft.Text("Curvature", weight=ft.FontWeight.BOLD)], spacing=row_h, alignment=ft.alignment.center, width=col_w),
                             ft.Column([ft.Text("Current value", text_align=ft.TextAlign.CENTER, width=int(1.7*col_w), weight=ft.FontWeight.BOLD)] + [ft.Row([cboard.buttons[k + '_minus'], cboard.texts[k+'_current'], cboard.buttons[k + '_plus']], spacing=0, height=row_h-5, alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
                                        for k in params], spacing=row_h, width=int(1.7*col_w)),
-                            ft.Column([ft.Text("Target", text_align=ft.TextAlign.CENTER, weight=ft.FontWeight.BOLD)] + [cboard.texts[k + '_target'] for k in params],
-                                      spacing=row_h, width=col_w),
+                            ft.Column([ft.Text("Target", text_align=ft.TextAlign.CENTER, width=int(1.7 * col_w),
+                                               weight=ft.FontWeight.BOLD)] + [ft.Row(
+                                [cboard.buttons[k + '_target_minus'], cboard.texts[k + '_target'],
+                                 cboard.buttons[k + '_target_plus']], spacing=0, height=row_h - 5,
+                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+                                                                              for k in params], spacing=row_h,
+                                      width=int(1.7 * col_w)),
                             ft.Column([ft.Text("Threshold", text_align=ft.TextAlign.CENTER, width=int(1.7*col_w), weight=ft.FontWeight.BOLD)] + [ft.Row([cboard.buttons[k + '_thresh_minus'], cboard.texts[k+'_threshold'], cboard.buttons[k + '_thresh_plus']], spacing=0, height=row_h-5, alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
                                        for k in params], spacing=row_h, width=int(1.7*col_w)),
                             ft.Column(
@@ -224,9 +229,12 @@ class ControlBoard:
         self.display_values = {k: np.nan for k in self.parameters}
         self.display_thresholds = {k: np.nan for k in self.parameters}
         self.thresholds = {k: np.nan for k in self.parameters}
+        self.display_targets = {k: np.nan for k in self.parameters}
+        self.targets = {k: np.nan for k in self.parameters}
         self.errors = {k: np.nan for k in self.parameters}
         self.is_changed = {k: False for k in self.parameters}
         self.is_threshold_changed = {k: False for k in self.parameters}
+        self.is_target_changed = {k: False for k in self.parameters}
         self.buttons = self.init_buttons()
         self.texts = self.init_texts()
         self.BUFFER_SIZE = 10  # number of values to remember
@@ -268,6 +276,30 @@ class ControlBoard:
                                                     on_long_press=self.decrease_curvature_thresh_by_10, **minus_button_style),
                    'curvature_thresh_plus': ft.TextButton(on_click=self.increase_curvature_thresh,
                                                    on_long_press=self.increase_curvature_thresh_by_10, **plus_button_style),
+                   'position_target_minus': ft.TextButton(on_click=self.decrease_position_target,
+                                                          on_long_press=self.decrease_position_target_by_10,
+                                                          **minus_button_style),
+                   'position_target_plus': ft.TextButton(on_click=self.increase_position_target,
+                                                         on_long_press=self.increase_position_target_by_10,
+                                                         **plus_button_style),
+                   'width_target_minus': ft.TextButton(on_click=self.decrease_width_target,
+                                                       on_long_press=self.decrease_width_target_by_10,
+                                                       **minus_button_style),
+                   'width_target_plus': ft.TextButton(on_click=self.increase_width_target,
+                                                      on_long_press=self.increase_width_target_by_10,
+                                                      **plus_button_style),
+                   'height_target_minus': ft.TextButton(on_click=self.decrease_height_target,
+                                                        on_long_press=self.decrease_height_target_by_10,
+                                                        **minus_button_style),
+                   'height_target_plus': ft.TextButton(on_click=self.increase_height_target,
+                                                       on_long_press=self.increase_height_target_by_10,
+                                                       **plus_button_style),
+                   'curvature_target_minus': ft.TextButton(on_click=self.decrease_curvature_target,
+                                                           on_long_press=self.decrease_curvature_target_by_10,
+                                                           **minus_button_style),
+                   'curvature_target_plus': ft.TextButton(on_click=self.increase_curvature_target,
+                                                          on_long_press=self.increase_curvature_target_by_10,
+                                                          **plus_button_style),
                    }
         return buttons
 
@@ -293,8 +325,11 @@ class ControlBoard:
             k2 = {'err_x': 'position', 'err_w': 'width', 'err_h': 'height', 'err_k': 'curvature'}[k]
             self.errors[k2] = err_dct[k][0]
             self.thresholds[k2] = err_dct[k][1]
+            self.targets[k2] = err_dct[k][1]
             if not self.is_threshold_changed[k2] or self.display_thresholds[k2] == self.thresholds[k2]:
                 self.display_thresholds[k2] = err_dct[k][1]
+            if not self.is_target_changed[k2] or self.display_targets[k2] == self.targets[k2]:
+                self.display_targets[k2] = err_dct[k][2]
             self.rel_error_history[k2].insert(0, err_dct[k][0]/err_dct[k][1])
             if len(self.rel_error_history[k2]) > self.BUFFER_SIZE:
                 self.rel_error_history[k2].pop()
@@ -314,6 +349,8 @@ class ControlBoard:
             self.texts[k + '_current'].color = ft.colors.BLUE_300 if (self.is_changed[k] and self.current_values[k] != self.display_values[k]) else ft.colors.WHITE
             self.texts[k + '_threshold'].color = ft.colors.BLUE_300 if (
                         self.is_threshold_changed[k] and self.thresholds[k] != self.display_thresholds[k]) else ft.colors.WHITE
+            self.texts[k + '_target'].color = ft.colors.BLUE_300 if (
+                        self.is_target_changed[k] and self.targets[k] != self.display_targets[k]) else ft.colors.WHITE
             error_color = ft.colors.RED_300 if (np.abs(self.errors[k]) > 2 * self.thresholds[k]) else (ft.colors.AMBER_300 if (np.abs(self.errors[k]) > self.thresholds[k]) else ft.colors.GREEN_300)
             self.texts[k + '_abs_error'].color = error_color
             self.texts[k + '_rel_error'].color = error_color
@@ -484,12 +521,94 @@ class ControlBoard:
         self.is_threshold_changed['curvature'] = True
         self.update_texts()
 
+    def increase_position_target(self, e):
+        self.display_targets['position'] += 1
+        self.is_target_changed['position'] = True
+        self.update_texts()
+
+    def increase_position_target_by_10(self, e):
+        self.display_targets['position'] += 10
+        self.is_target_changed['position'] = True
+        self.update_texts()
+
+    def decrease_position_target(self, e):
+        self.display_targets['position'] -= 1
+        self.is_target_changed['position'] = True
+        self.update_texts()
+
+    def decrease_position_target_by_10(self, e):
+        self.display_targets['position'] -= 10
+        self.is_target_changed['position'] = True
+        self.update_texts()
+
+    def increase_width_target(self, e):
+        self.display_targets['width'] += 1
+        self.is_target_changed['width'] = True
+        self.update_texts()
+
+    def increase_width_target_by_10(self, e):
+        self.display_targets['width'] += 10
+        self.is_target_changed['width'] = True
+        self.update_texts()
+
+    def decrease_width_target(self, e):
+        self.display_targets['width'] -= 1
+        self.is_target_changed['width'] = True
+        self.update_texts()
+
+    def decrease_width_target_by_10(self, e):
+        self.display_targets['width'] -= 10
+        self.is_target_changed['width'] = True
+        self.update_texts()
+
+    def increase_height_target(self, e):
+        self.display_targets['height'] += 1
+        self.is_target_changed['height'] = True
+        self.update_texts()
+
+    def increase_height_target_by_10(self, e):
+        self.display_targets['height'] += 10
+        self.is_target_changed['height'] = True
+        self.update_texts()
+
+    def decrease_height_target(self, e):
+        self.display_targets['height'] -= 1
+        self.is_target_changed['height'] = True
+        self.update_texts()
+
+    def decrease_height_target_by_10(self, e):
+        self.display_targets['height'] -= 10
+        self.is_target_changed['height'] = True
+        self.update_texts()
+
+    def increase_curvature_target(self, e):
+        self.display_targets['curvature'] += .1
+        self.is_target_changed['curvature'] = True
+        self.update_texts()
+
+    def increase_curvature_target_by_10(self, e):
+        self.display_targets['curvature'] += 1
+        self.is_target_changed['curvature'] = True
+        self.update_texts()
+
+    def decrease_curvature_target(self, e):
+        self.display_targets['curvature'] -= .1
+        self.is_target_changed['curvature'] = True
+        self.update_texts()
+
+    def decrease_curvature_target_by_10(self, e):
+        self.display_targets['curvature'] -= 1
+        self.is_target_changed['curvature'] = True
+        self.update_texts()
+
     def reset(self, e):
         for k in self.parameters:
             self.display_values[k] = self.current_values[k]
             self.is_changed[k] = False
             self.display_thresholds[k] = self.thresholds[k]
             self.is_threshold_changed[k] = False
+            self.display_targets[k] = self.targets[k]
+            self.is_target_changed[k] = False
         self.update_texts()
 
     def submit(self, folder):
@@ -502,7 +621,9 @@ class ControlBoard:
             if self.is_changed[p]:
                 actions.append((kmap[p], self.display_values[p]))
             if self.is_threshold_changed[p]:
-                actions.append((kmap[p] + "t", self.display_thresholds[p]))
+                actions.append((kmap[p] + "_threshold", self.display_thresholds[p]))
+            if self.is_target_changed[p]:
+                actions.append((kmap[p] + "_target", self.display_targets[p]))
         command = "\n".join([str(a) for a in actions])
 
         with open(folder + "/commands/command_{:04d}.txt".format(n), 'w') as f:
@@ -524,10 +645,10 @@ def val_from_text(s):
 
 
 def str_to_tuple(s):
-    v1, v2 = s.split(', ')
-    v1 = np.nan if v1[1:] == ['na', ''] else float(v1[1:])
-    v2 = np.nan if v2[:-1] in ['na', ''] else float(v2[:-1])
-    return v1, v2
+    s = s.replace('(', '').replace(')', '')
+    vals = s.split(', ')
+    vals = [np.nan if v in ['', 'na'] else v for v in vals]
+    return tuple(vals)
 
 
 def remove_inner_contour_points(ice_edges, dy=1):
