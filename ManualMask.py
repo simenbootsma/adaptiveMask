@@ -46,41 +46,59 @@ class Cylinder:
         if self.transposed:
             self.move_right()
         else:
-            self.center = min(self.resolution[1]-self.width//2, self.center + self.sensitivity)
+            self.set_center(self.center + self.sensitivity)
 
     def move_up(self):
         if self.transposed:
             self.move_left()
         else:
-            self.center = max(self.width//2, self.center - self.sensitivity)
+            self.set_center(self.center - self.sensitivity)
 
     def move_right(self):
         if not self.transposed:
             self.move_up()
         else:
-            self.center = min(self.resolution[0]-self.width//2, self.center + self.sensitivity)
+            self.set_center(self.center + self.sensitivity)
 
     def move_left(self):
         if not self.transposed:
             self.move_down()
         else:
-            self.center = max(self.width//2, self.center - self.sensitivity)
+            self.set_center(self.center - self.sensitivity)
+
+    def set_center(self, val):
+        if self.transposed:
+            val = max(self.width//2, val)
+            val = min(self.resolution[0]-self.width//2, val)
+        else:
+            val = max(self.width//2, val)
+            val = min(self.resolution[1]-self.width//2, val)
+        self.center = val
 
     def increase_width(self):
-        self.width = min(self.resolution[1 - self.transposed], int(2*self.height/(self.curvature+1e-5)-1), self.width + self.sensitivity)
+        self.set_width(self.width + self.sensitivity)
 
     def decrease_width(self):
-        self.width = max(2, self.width - self.sensitivity)
+        self.set_width(self.width - self.sensitivity)
+
+    def set_width(self, val):
+        val = max(2, val)
+        val = min(self.resolution[1 - self.transposed], int(2*self.height/(self.curvature+1e-5)-1), val)
+        self.width = val
 
     def increase_height(self):
-        self.height = min(self.resolution[self.transposed], self.height + self.sensitivity)
+        self.set_height(self.height + self.sensitivity)
 
     def decrease_height(self):
+        self.set_height(self.height - self.sensitivity)
+
+    def set_height(self, val):
+        val = min(self.resolution[self.transposed], val)
         min_height = int(self.curvature*self.width/2)+1
-        while self.height - self.sensitivity < min_height:
+        while val < min_height:
             self.decrease_curvature()
             min_height = int(self.curvature * self.width / 2) + 1
-        self.height = self.height - self.sensitivity
+        self.height = val
 
     def increase_bs_height(self):
         self.bs_height = min(self.bs_height + self.sensitivity, self.height)
@@ -95,10 +113,15 @@ class Cylinder:
         self.blur = max(0, self.blur - 1)
 
     def increase_curvature(self):
-        self.curvature = min(2*self.height/self.width, self.curvature + 2*self.sensitivity/self.width)
+        self.set_curvature(self.curvature + 2*self.sensitivity/self.width)
 
     def decrease_curvature(self):
-        self.curvature = max(0, self.curvature - 2*self.sensitivity/self.width)
+        self.set_curvature(self.curvature - 2*self.sensitivity/self.width)
+
+    def set_curvature(self, val):
+        val = min(2*self.height/self.width, val)
+        val = max(0, val)
+        self.curvature = val
 
     def increase_contrast(self):
         self.contrast = min(max(0., self.contrast + 0.01), 1)
