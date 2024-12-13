@@ -14,21 +14,20 @@ matplotlib.use('Qt5Agg')
 DEMO = False  # run mask with existing data
 IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241213/'  # folder where images ares saved
 ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241213/'  # folder for communicating with external computer
-ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 PREV_CONTOUR_LENGTH = None
 
 TARGETS = {
     'm': 0,    # desired difference in white area between left and right in camera pixels
     'w': 350,  # desired difference in mask and ice width in camera pixels
-    'h': 200,  # desired distance between mask and ice tip in camera pixels
+    'h': 150,  # desired distance between mask and ice tip in camera pixels
     'k': 1,    # desired white area ratio between tip and full cylinder
 }
 
 THRESHOLDS = {
-    'm': 50,   # minimum deviation from target in camera pixels
-    'w': 50,   # maximum deviation from target in camera pixels
-    'h': 50,   # maximum deviation from target in camera pixels
-    'k': 0.5,  # maximum deviation from target ratio
+    'm': 30,   # minimum deviation from target in camera pixels
+    'w': 30,   # maximum deviation from target in camera pixels
+    'h': 30,   # maximum deviation from target in camera pixels
+    'k': 0.3,  # maximum deviation from target ratio
 }
 
 
@@ -301,8 +300,9 @@ def fake_img(cyl, n=0):
     n = min(len(files)-1, n)
     c = np.load(files[n])
 
-    ice = 255 * np.ones((4128, 2752), np.uint8)
-    ice = cv.fillPoly(ice, [c.astype(np.int32)], (0, 0, 0))
+    # ice = 255 * np.ones((4128, 2752), np.uint8)
+    ice = 255 * np.ones((8256, 5504), np.uint8)
+    ice = cv.fillPoly(ice, [c.astype(np.int32) * 2], (0, 0, 0))
 
     # arr = np.load('test_data/test_data7.npy')
     # n = min(n//2, arr.shape[-1]-1)
