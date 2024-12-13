@@ -13,7 +13,7 @@ from monitor_mask import find_mask_and_ice, find_edges
 #   - Graph with parameters
 #   - Live blinker
 
-FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241212"  # must contain jpg, updates, commands folders
+FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241213"  # must contain jpg, updates, commands folders
 update_paths = sorted(glob(FOLDER + "/updates/*.txt"))
 image_paths = sorted(glob(FOLDER + "/jpg/*.jpg"))
 WINDOW_OPEN = True
@@ -322,7 +322,7 @@ class ControlBoard:
             self.current_values[k2] = par_dct[k]
 
         for k in err_dct:
-            k2 = {'err_x': 'position', 'err_w': 'width', 'err_h': 'height', 'err_k': 'curvature'}[k]
+            k2 = {'err_m': 'position', 'err_w': 'width', 'err_h': 'height', 'err_k': 'curvature'}[k]
             self.errors[k2] = err_dct[k][0]
             self.thresholds[k2] = err_dct[k][1]
             if not self.is_threshold_changed[k2] or self.display_thresholds[k2] == self.thresholds[k2]:
