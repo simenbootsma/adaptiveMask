@@ -12,8 +12,8 @@ import shutil
 matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
-IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241212/'  # folder where images ares saved
-ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241212/'  # folder for communicating with external computer
+IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241213/'  # folder where images ares saved
+ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241213/'  # folder for communicating with external computer
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 PREV_CONTOUR_LENGTH = None
 
@@ -208,12 +208,13 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
     avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
     tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
-    if np.max(tip_iw_ratio) > avg_iw_ratio:
-        k_diff = avg_iw_ratio/np.max(tip_iw_ratio) - 1
-    else:
-        k_diff = avg_iw_ratio / np.min(tip_iw_ratio) - 1
+    k_diff = avg_iw_ratio / np.max(tip_iw_ratio)
+    # if np.max(tip_iw_ratio) > avg_iw_ratio:
+    #     k_diff = avg_iw_ratio / np.max(tip_iw_ratio)
+    # else:
+    #     k_diff = avg_iw_ratio / np.min(tip_iw_ratio)
 
-    errors = {'m': x_diff - TARGETS['m'], 'h': h_diff - TARGETS['h'], 'w': w_diff - TARGETS['w'], 'k': k_diff - TARGETS['k']}
+    errors = {'m': x_diff - TARGETS['m'], 'h': h_diff - TARGETS['h'], 'w': w_diff - TARGETS['w'], 'k': TARGETS['k'] - k_diff}
 
     # Make action list
     for k in errors:
