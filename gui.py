@@ -2,27 +2,73 @@ import flet as ft
 import os
 import numpy as np
 import time
-import matplotlib.pyplot as plt
 from glob import glob
+import cv2 as cv
+from monitor_mask import find_mask_and_ice, find_edges
 
 
 # TODO:
 #   - Implement writing with GUI
 #   - Implement changing thresholds
 #   - Graph with parameters
+#   - Live blinker
+
+FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241212"  # must contain jpg, updates, commands folders
+update_paths = sorted(glob(FOLDER + "/updates/*.txt"))
+image_paths = sorted(glob(FOLDER + "/jpg/*.jpg"))
+WINDOW_OPEN = True
+last_update_time = None
+start_time = None
 
 
 def main(page: ft.Page):
+    global update_paths, image_paths, WINDOW_OPEN, FOLDER, last_update_time, start_time
     # FUNCTIONALITY
+    params = ['position', 'width', 'height', 'curvature']  # parameters that will be shown
+
+    def quit_program():
+        global WINDOW_OPEN
+        WINDOW_OPEN = False
 
     # Dashboard
     def pick_folder_result(e: ft.FilePickerResultEvent):
+        global FOLDER, update_paths, image_paths, last_update_time, start_time
         data_folder.value = e.path
         data_folder.update()
+        FOLDER = e.path
+        update_paths = sorted(glob(FOLDER + "/updates/*.txt"))
+        image_paths = sorted(glob(FOLDER + "/jpg/*.jpg"))
+        last_update_time, start_time = None, None
 
-    data_folder = ft.Text(os.getcwd())
+    data_folder = ft.Text(FOLDER)
     data_folder_picker = ft.FilePicker(on_result=pick_folder_result)
     page.overlay.append(data_folder_picker)
+
+    live_image = ft.Image(
+        src="",
+        width=300,
+        height=500,
+        fit=ft.ImageFit.FIT_HEIGHT,
+        repeat=ft.ImageRepeat.NO_REPEAT,
+        border_radius=ft.border_radius.all(10),
+    )
+
+    def toggle_contour(e):
+        if len(image_paths) == 0:
+            return
+        if live_image.src == '_temp_dashboard_image.jpg':
+            live_image.src = image_paths[-1]
+        else:
+            img = cv.imread(image_paths[-1])
+            gray_img = np.mean(img, axis=2).astype(np.uint8)
+            contour = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
+            contour = remove_inner_contour_points(contour)
+            img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=40)
+            cv.imwrite('_temp_dashboard_image.jpg', img)
+            live_image.src = '_temp_dashboard_image.jpg'
+        live_image.update()
+
+    contour_checkbox = ft.Checkbox(label='Show contour', on_change=toggle_contour)
 
     # Controls
     cboard = ControlBoard()
@@ -40,18 +86,12 @@ def main(page: ft.Page):
     # LAYOUT
     row_h = 25  # row height for control tab
     col_w = 100  # column width for control tab
-    params = ['position', 'width', 'height', 'curvature']
     last_update_text = ft.Text("Last update: -",)
-
-    plt.imsave('temp_imgs/dashboard_img.jpg', np.zeros((1000, 400, 3), dtype=np.uint8))
-    live_image = ft.Image(
-        src="temp_imgs/dashboard_img.jpg",
-        width=300,
-        height=600,
-        fit=ft.ImageFit.FIT_HEIGHT,
-        repeat=ft.ImageRepeat.NO_REPEAT,
-        border_radius=ft.border_radius.all(10),
-    )
+    last_image_text = ft.Text("Last update: -", )
+    run_time_text = ft.Text("Run time     --:--:--", size=30, weight=ft.FontWeight.W_300)
+    status_boxes = {k: [ft.Container(width=40, height=40, visible=False, border_radius=3, border=ft.border.all(2, ft.colors.GREEN_50))] + [ft.Container(width=30, height=30, visible=False, border_radius=3) for _ in range(cboard.BUFFER_SIZE-1)] for k in params}
+    status_rows = [ft.Row([ft.Container(ft.Text(k, size=20, weight=ft.FontWeight.BOLD), width=100, height=50, alignment=ft.Alignment(-1, 0))] + status_boxes[k], spacing=20) for k in params]
+    status_rows.insert(0, ft.Row([ft.Container(width=100, height=50), ft.Icon(ft.icons.ARROW_BACK), ft.Container(ft.Text("time", size=20, weight=ft.FontWeight.BOLD), alignment=ft.Alignment(-1, 0))], spacing=20))
 
     t = ft.Tabs(
         selected_index=0,
@@ -68,12 +108,13 @@ def main(page: ft.Page):
                                                   on_click=lambda _: data_folder_picker.get_directory_path()),
                                 data_folder
                             ]),
-                            ft.TextField(label="Save filename", hint_text='save_name', suffix_text='.txt', width=200)
-                        ], spacing=10),
-                        ft.Column([last_update_text, live_image]),
+                            run_time_text
+                        ] + status_rows, spacing=10),
+                        ft.Column([last_image_text, contour_checkbox, live_image]),
                     ], spacing=50)), margin=20
                 ),
             ),
+
             ft.Tab(
                 text="Controls",
                 icon=ft.icons.CONTROL_CAMERA,
@@ -108,29 +149,72 @@ def main(page: ft.Page):
     )
 
     page.add(t)
-    page.window.height = 600
+    page.on_close = quit_program
+    page.window.height = 800
     page.window.width = 1200
     page.update()
 
-    # cboard.update(r'update_example.txt')
-    for i in range(12, 100):
-        fname = r'/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/updates/update_{:04d}.txt'.format(i)
-        cboard.update(fname.format(i))
-        dt = time.time() - os.path.getmtime(fname)
-        if dt > 3600:
-            t_str = '{:.0f} hours'.format(dt // 3600)
-        elif dt > 60:
-            t_str = '{:.0f} minutes'.format(dt // 60)
-        else:
-            t_str = '{:.0f} seconds'.format(dt)
-        last_update_text.value = 'Last update: {:s} ago'.format(t_str)
-        last_update_text.update()
+    while WINDOW_OPEN:
+        new_updates = [fn for fn in sorted(glob(FOLDER + "/updates/*.txt")) if fn not in update_paths]
+        new_images = [fn for fn in sorted(glob(FOLDER + "/jpg/*.jpg")) if fn not in image_paths]
 
-        img_name = r'/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/jpg/IMG_{:05d}.jpg'.format(i)
-        live_image.src = img_name
-        live_image.update()
+        if last_update_time is None and len(update_paths) > 0 and len(image_paths) > 0:
+            cboard.update(update_paths[-1])
+            last_update_time = os.path.getmtime(update_paths[-1])
+            start_time = os.path.getmtime(update_paths[0])
+            live_image.src = image_paths[-1]
+            live_image.update()
+        elif last_update_time is None:
+            last_update_text.value = 'Last update: --'
+            last_update_text.update()
+            last_image_text.value = 'Last update: --'
+            last_image_text.update()
+            run_time_text.value = 'Run time     --:--:--'
+            run_time_text.update()
+            live_image.src = ''
+            live_image.update()
+            cboard.reset(None)
 
-        time.sleep(2)
+        if len(new_updates) > 0:
+            cboard.update(new_updates[-1])
+            last_update_time = os.path.getmtime(new_updates[-1])
+
+            # Update status boxes
+            for k in params:
+                for i in range(len(cboard.rel_error_history[k])):
+                    err = cboard.rel_error_history[k][i]
+                    status_boxes[k][i].visible = True
+                    status_boxes[k][i].bgcolor = ft.colors.RED_300 if abs(err) >= 2 else ft.colors.AMBER_300 if abs(
+                        err) >= 1 else ft.colors.GREEN_300
+                    status_boxes[k][i].update()
+            update_paths += new_updates
+
+        if len(new_images) > 0:
+            show_contours = live_image.src == '_temp_dashboard_image.jpg'
+            live_image.src = new_images[-1]
+            image_paths += new_images
+            if show_contours:
+                toggle_contour(None)
+            live_image.update()
+
+        if last_update_time is not None and start_time is not None:
+            dt = time.time() - last_update_time
+            if dt > 3600:
+                t_str = '{:.0f} hours'.format(dt // 3600)
+            elif dt > 60:
+                t_str = '{:.0f} minutes'.format(dt // 60)
+            else:
+                t_str = '{:.0f} seconds'.format(dt)
+            last_update_text.value = 'Last update: {:s} ago'.format(t_str)
+            last_update_text.update()
+            last_image_text.value = 'Last update: {:s} ago'.format(t_str)
+            last_image_text.update()
+
+            rt = int(time.time() - start_time)
+            run_time_text.value = 'Run time     {:02d}:{:02d}:{:02d}'.format(rt//3600, (rt//60) % 60, rt % 60)
+            run_time_text.update()
+
+        time.sleep(.1)
 
 
 class ControlBoard:
@@ -145,6 +229,8 @@ class ControlBoard:
         self.is_threshold_changed = {k: False for k in self.parameters}
         self.buttons = self.init_buttons()
         self.texts = self.init_texts()
+        self.BUFFER_SIZE = 10  # number of values to remember
+        self.rel_error_history = {k: [] for k in self.parameters}
 
     def init_buttons(self):
         minus_button_style = {'icon': ft.icons.REMOVE}
@@ -191,7 +277,7 @@ class ControlBoard:
         return texts
 
     def update(self, update_file):
-        data = [line[:-1].split(': ') for line in open(update_file, 'r').readlines()]
+        data = [line.replace('\n', '').split(': ') for line in open(update_file, 'r').readlines()]
         data = [val for val in data if len(val) == 2]
         dct = {key: val for key, val in data}
         err_dct = {key: str_to_tuple(val) for key, val in dct.items() if 'err' in key}
@@ -206,20 +292,24 @@ class ControlBoard:
         for k in err_dct:
             k2 = {'err_x': 'position', 'err_w': 'width', 'err_h': 'height', 'err_k': 'curvature'}[k]
             self.errors[k2] = err_dct[k][0]
-            self.thresholds[k2] = np.abs(err_dct[k][0]/err_dct[k][1])  # TODO: pass threshold directly
+            self.thresholds[k2] = err_dct[k][1]
             if not self.is_threshold_changed[k2] or self.display_thresholds[k2] == self.thresholds[k2]:
-                self.display_thresholds[k2] = np.abs(err_dct[k][0]/err_dct[k][1])
+                self.display_thresholds[k2] = err_dct[k][1]
+            self.rel_error_history[k2].insert(0, err_dct[k][0]/err_dct[k][1])
+            if len(self.rel_error_history[k2]) > self.BUFFER_SIZE:
+                self.rel_error_history[k2].pop()
 
         self.update_texts()
 
     def update_texts(self):
         suffixes = ['_current', '_abs_error', '_rel_error', '_threshold', '_target']
         for k in self.parameters:
-            self.texts[k + '_current'].value = '-' if np.isnan(self.display_values[k]) else '{:.0f} px'.format(self.display_values[k])
-            self.texts[k + '_abs_error'].value = '-' if np.isnan(self.errors[k]) else '{:.0f} px'.format(self.errors[k])
+            style = '{:.2f}' if k == 'curvature' else '{:.0f} px'
+            self.texts[k + '_current'].value = '-' if np.isnan(self.display_values[k]) else style.format(self.display_values[k])
+            self.texts[k + '_abs_error'].value = '-' if np.isnan(self.errors[k]) else style.format(self.errors[k])
             self.texts[k + '_rel_error'].value = '-' if np.isnan(self.errors[k]) else '{:.2f}'.format(np.abs(self.errors[k]/self.thresholds[k]))
-            self.texts[k + '_threshold'].value = '-' if np.isnan(self.display_thresholds[k]) else '{:.0f} px'.format(self.display_thresholds[k])
-            self.texts[k + '_target'].value = '-' if np.isnan(self.errors[k]) else '{:.0f} px'.format(self.current_values[k] - self.errors[k])
+            self.texts[k + '_threshold'].value = '-' if np.isnan(self.display_thresholds[k]) else style.format(self.display_thresholds[k])
+            self.texts[k + '_target'].value = '-' if np.isnan(self.errors[k]) else style.format(self.current_values[k] - self.errors[k])
 
             self.texts[k + '_current'].color = ft.colors.BLUE_300 if (self.is_changed[k] and self.current_values[k] != self.display_values[k]) else ft.colors.WHITE
             self.texts[k + '_threshold'].color = ft.colors.BLUE_300 if (
@@ -410,9 +500,9 @@ class ControlBoard:
         actions = []
         for p in self.parameters:
             if self.is_changed[p]:
-                actions.append((kmap[p], self.display_values[p] - self.current_values[p]))
+                actions.append((kmap[p], self.display_values[p]))
             if self.is_threshold_changed[p]:
-                actions.append((kmap[p] + "t", self.display_thresholds[p] - self.thresholds[p]))
+                actions.append((kmap[p] + "t", self.display_thresholds[p]))
         command = "\n".join([str(a) for a in actions])
 
         with open(folder + "/commands/command_{:04d}.txt".format(n), 'w') as f:
@@ -435,7 +525,22 @@ def val_from_text(s):
 
 def str_to_tuple(s):
     v1, v2 = s.split(', ')
-    return float(v1[1:]), float(v2[:-1])
+    v1 = np.nan if v1[1:] == ['na', ''] else float(v1[1:])
+    v2 = np.nan if v2[:-1] in ['na', ''] else float(v2[:-1])
+    return v1, v2
+
+
+def remove_inner_contour_points(ice_edges, dy=1):
+    ice_bins = [ice_edges[np.abs(ice_edges[:, 1] - j * dy) <= dy / 2, :] for j in range(int(np.max(ice_edges[:, 1]) / dy))]
+    left, right = [], []
+    xmean = np.mean(ice_edges[:, 0])
+    for j, ib in enumerate(ice_bins):
+        lb, rb = ib[ib[:, 0] < xmean], ib[ib[:, 0] > xmean]
+        if len(lb) > 0:
+            left.append([np.min(lb[:, 0]), j*dy])
+        if len(rb) > 0:
+            right.insert(0, [np.max(rb[:, 0]), j*dy])
+    return np.array(left + right)
 
 
 ft.app(main)
