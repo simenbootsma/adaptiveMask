@@ -17,11 +17,18 @@ ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldro
 ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 PREV_CONTOUR_LENGTH = None
 
+TARGETS = {
+    'm': 0,    # intended difference in white area between left and right in camera pixels
+    'w': 350,  # intended difference in mask and ice width in camera pixels
+    'h': 200,  # intended distance between mask and ice tip in camera pixels
+    'k': 1,    # intended white area ratio between tip and full cylinder
+}
+
 THRESHOLDS = {
-    'm': 50,   # minimum difference in white area between left and right before moving laterally
-    'w': 300,  # maximum difference in mask and ice width in camera pixels
-    'h': 200,  # maximum distance between mask and ice tip in camera pixels
-    'k': 1,    # maximum difference in white area ratio between tip and full cylinder
+    'm': 50,   # minimum deviation from target in camera pixels
+    'w': 50,  # maximum deviation from target in camera pixels
+    'h': 50,  # maximum deviation from target in camera pixels
+    'k': 0.5,  # maximum deviation from target ratio
 }
 
 
@@ -91,9 +98,10 @@ def main(save_contours=True):
             if len(command_actions) > 0:
                 print(command_actions)
             for a in command_actions:
-                if len(a) > 1 and len(a[0]) > 1 and a[0][1] == 't':
+                if len(a) > 1 and 'threshold' in a[0]:
                     THRESHOLDS[a[0][0]] = a[1]
-                    print('changed threshold')
+                elif len(a) > 1 and 'target' in a[0]:
+                    TARGETS[a[0][0]] = a[1]
                 elif len(a) > 1:
                     match a[0]:
                         case 'm':
@@ -131,7 +139,7 @@ def main(save_contours=True):
 
 
 def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False):
-    global PREV_CONTOUR_LENGTH, THRESHOLDS
+    global PREV_CONTOUR_LENGTH, THRESHOLDS, TARGETS
 
     """ Find which buttons should be pressed to improve masking.
     NOTE: Assumes vertical cylinder suspended from the top.
@@ -165,20 +173,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
         fname = "contour_h{:02d}m{:02d}s{:02d}_us{:06d}.npy".format(now.hour, now.minute, now.second, now.microsecond)
         np.save(save_folder + '/' + fname, ice_edges)
 
-    M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
-
-    # # Move left/right?
-    # cx = int(np.mean(ice_edges[:, 0]))
-    # x_diff = (np.sum(M[:, cx:]) - np.sum(M[:, :cx]))/np.sum(M)  # normalised difference in white area between left and right side of the cylinder
-    #
-    # # Adjust width
-    # min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
-    # sorted_ice_edges_x = np.sort(ice_edges[:, 0])
-    # max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
-    # max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
-    # w_diff = max_width_mask - max_width
-
-    # Adjust width 2
+    # Adjust width
     xmean_ice = np.mean(ice_edges[:, 0])
     dy = 10  # bin size in pixels
     ice_bins = [ice_edges[np.abs(ice_edges[:, 1] - j * dy) <= dy / 2, :] for j in range(int(img.shape[0] / dy))]
@@ -194,7 +189,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     width_diffs = width_diffs[~np.isnan(width_diffs)]
     w_diff = np.sort(width_diffs)[int(.02 * len(width_diffs))]  # take value at 2% instead of min to ignore extreme values
 
-    # Adjust position 2
+    # Adjust position
     white_space_left = [np.nan if (len(ice_bins[j][0]) == 0 or len(mask_bins[j][0]) == 0)
                         else np.abs(np.min(ice_bins[j][0][:, 0]) - np.min(mask_bins[j][0][:, 0]))
                         for j in range(len(ice_bins))]
@@ -210,6 +205,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     h_diff = mask_tip_y - tip_y
 
     # Adjust curvature
+    M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
     avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
     tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
     if np.max(tip_iw_ratio) > avg_iw_ratio:
@@ -217,46 +213,16 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     else:
         k_diff = avg_iw_ratio / np.min(tip_iw_ratio) - 1
 
-    # # Adjust curvature (method 2)
-    # dy = 5  # averaging box size in number of pixels
-    # ice_tip_widths = [np.max(ice_edges[np.abs(ice_edges[:, 1] - j) < dy, 0]) - np.min(ice_edges[np.abs(ice_edges[:, 1] - j) < dy, 0])
-    #                   for j in range(int(0.9 * tip_y), tip_y)]
-    # mask_tip_widths = [np.max(mask_edges[np.abs(mask_edges[:, 1] - j) < dy, 0]) - np.min(mask_edges[np.abs(mask_edges[:, 1] - j) < dy, 0])
-    #                    for j in range(int(0.9 * tip_y), tip_y)]
-    #
-    # tip_widths_diff = np.array(mask_tip_widths) - np.array(ice_tip_widths)
-    # # prioritize fixing a white space that is too small
-    # if abs(np.min(tip_widths_diff) - w_diff) > k_thresh:
-    #     k_diff = np.min(tip_widths_diff) - w_diff
-    # else:
-    #     k_diff = np.max(tip_widths_diff) - w_diff
+    errors = {'m': x_diff - TARGETS['m'], 'h': h_diff - TARGETS['h'], 'w': w_diff - TARGETS['w'], 'k': k_diff - TARGETS['k']}
 
     # Make action list
-    if abs(x_diff) > THRESHOLDS['m']:
-        s = sensitivity_large if abs(x_diff) > 2 * THRESHOLDS['m'] else sensitivity_small
-        actions.append((ARROW_LEFT if x_diff > 0 else ARROW_RIGHT, s))
-
-    if abs(w_diff) > THRESHOLDS['w']:
-        # print(abs(w_diff) - w_thresh)
-        s = sensitivity_large if abs(w_diff) > 2 * THRESHOLDS['w'] else sensitivity_small
-        actions.append(("W" if w_diff > 0 else "w", s))
-
-    changing_height = False
-    if abs(h_diff) > THRESHOLDS['h']:
-        # print(abs(h_diff) - h_thresh)
-        s = sensitivity_large if abs(h_diff) > 2 * THRESHOLDS['h'] else sensitivity_small
-        actions.append(("H" if h_diff > 0 else "h", s))
-        changing_height = True
-
-    if abs(k_diff) > THRESHOLDS['k'] and not changing_height:
-        s = sensitivity_large if abs(k_diff) > 2 * THRESHOLDS['k'] else sensitivity_small
-        actions.append(("k" if k_diff > 0 else "K", s))
+    for k in errors:
+        if abs(errors[k]) > THRESHOLDS[k]:
+            s = sensitivity_large if abs(errors[k]) > 2 * THRESHOLDS[k] else sensitivity_small
+            actions.append((k.upper() if errors[k] > 0 else k.lower(), s))
 
     err_str = [
-        " ok " if abs(x_diff) <= THRESHOLDS['m'] else "{:.02f}".format(x_diff / THRESHOLDS['m']),
-        " ok " if abs(w_diff) <= THRESHOLDS['w'] else "{:.02f}".format(w_diff / THRESHOLDS['w']),
-        " ok " if abs(h_diff) <= THRESHOLDS['h'] else "{:.02f}".format(h_diff / THRESHOLDS['h']),
-        " ok " if abs(k_diff) <= THRESHOLDS['k'] else "{:.02f}".format(k_diff / THRESHOLDS['k']),
+        " ok " if abs(errors[k]) <= THRESHOLDS[k] else "{:.02f}".format(errors[k] / THRESHOLDS[k]) for k in errors
     ]
 
     # add colours
@@ -271,9 +237,8 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     print("\r"+count_str+" Errors  |  x: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
 
     if return_errors:
-        errors = {'x': (x_diff, THRESHOLDS['m']), 'w': (w_diff, THRESHOLDS['w']), 'h': (h_diff, THRESHOLDS['h']),
-                  'k': (k_diff, THRESHOLDS['k'])}  # tuples of absolute errors and thresholds
-        return actions, errors
+        err_dct = {k: (errors[k], THRESHOLDS[k], TARGETS[k]) for k in errors}
+        return actions, err_dct
     return actions
 
 
