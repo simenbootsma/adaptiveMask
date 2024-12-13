@@ -18,16 +18,16 @@ ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
 PREV_CONTOUR_LENGTH = None
 
 TARGETS = {
-    'm': 0,    # intended difference in white area between left and right in camera pixels
-    'w': 350,  # intended difference in mask and ice width in camera pixels
-    'h': 200,  # intended distance between mask and ice tip in camera pixels
-    'k': 1,    # intended white area ratio between tip and full cylinder
+    'm': 0,    # desired difference in white area between left and right in camera pixels
+    'w': 350,  # desired difference in mask and ice width in camera pixels
+    'h': 200,  # desired distance between mask and ice tip in camera pixels
+    'k': 1,    # desired white area ratio between tip and full cylinder
 }
 
 THRESHOLDS = {
     'm': 50,   # minimum deviation from target in camera pixels
-    'w': 50,  # maximum deviation from target in camera pixels
-    'h': 50,  # maximum deviation from target in camera pixels
+    'w': 50,   # maximum deviation from target in camera pixels
+    'h': 50,   # maximum deviation from target in camera pixels
     'k': 0.5,  # maximum deviation from target ratio
 }
 
@@ -234,7 +234,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
         else:
             err_str[i] = "\033[31m" + err_str[i] + "\033[0m"
     count_str = "" if count is None else "[IMG {:d}]".format(count)
-    print("\r"+count_str+" Errors  |  x: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
+    print("\r"+count_str+" Errors  |  m: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
 
     if return_errors:
         err_dct = {k: (errors[k], THRESHOLDS[k], TARGETS[k]) for k in errors}
@@ -352,7 +352,7 @@ def give_update(errors, cyl, img_count):
 
 
 def read_command(filename):
-    allowed_actions = [c for c in 'swhkmg'] + ['wt', 'ht', 'mt', 'kt']
+    allowed_actions = [c for c in 'swhkmg']
     actions = []
     try:
         file = open(filename, 'r')
@@ -362,7 +362,7 @@ def read_command(filename):
                 for c in "'()":
                     ln = ln.replace(c, '')
                 key, val = ln.split(', ')
-                if key in allowed_actions:
+                if (key in allowed_actions) or ('target' in key) or ('threshold' in key):
                     actions.append((key, float(val)))
             else:
                 actions += [c for c in ln if c in allowed_actions]
