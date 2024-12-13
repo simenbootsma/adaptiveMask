@@ -325,11 +325,12 @@ class ControlBoard:
             k2 = {'err_x': 'position', 'err_w': 'width', 'err_h': 'height', 'err_k': 'curvature'}[k]
             self.errors[k2] = err_dct[k][0]
             self.thresholds[k2] = err_dct[k][1]
-            self.targets[k2] = err_dct[k][1]
             if not self.is_threshold_changed[k2] or self.display_thresholds[k2] == self.thresholds[k2]:
                 self.display_thresholds[k2] = err_dct[k][1]
-            if not self.is_target_changed[k2] or self.display_targets[k2] == self.targets[k2]:
-                self.display_targets[k2] = err_dct[k][2]
+            if len(err_dct[k]) > 2:
+                self.targets[k2] = err_dct[k][2]
+                if not self.is_target_changed[k2] or self.display_targets[k2] == self.targets[k2]:
+                    self.display_targets[k2] = err_dct[k][2]
             self.rel_error_history[k2].insert(0, err_dct[k][0]/err_dct[k][1])
             if len(self.rel_error_history[k2]) > self.BUFFER_SIZE:
                 self.rel_error_history[k2].pop()
@@ -340,11 +341,11 @@ class ControlBoard:
         suffixes = ['_current', '_abs_error', '_rel_error', '_threshold', '_target']
         for k in self.parameters:
             style = '{:.2f}' if k == 'curvature' else '{:.0f} px'
-            self.texts[k + '_current'].value = '-' if np.isnan(self.display_values[k]) else style.format(self.display_values[k])
+            self.texts[k + '_current'].value = '-' if np.isnan(self.display_values[k]) else style.format(self.display_values[k]).replace('px', 'spx')
             self.texts[k + '_abs_error'].value = '-' if np.isnan(self.errors[k]) else style.format(self.errors[k])
             self.texts[k + '_rel_error'].value = '-' if np.isnan(self.errors[k]) else '{:.2f}'.format(np.abs(self.errors[k]/self.thresholds[k]))
             self.texts[k + '_threshold'].value = '-' if np.isnan(self.display_thresholds[k]) else style.format(self.display_thresholds[k])
-            self.texts[k + '_target'].value = '-' if np.isnan(self.errors[k]) else style.format(self.current_values[k] - self.errors[k])
+            self.texts[k + '_target'].value = '-' if np.isnan(self.display_targets[k]) else style.format(self.display_targets[k])
 
             self.texts[k + '_current'].color = ft.colors.BLUE_300 if (self.is_changed[k] and self.current_values[k] != self.display_values[k]) else ft.colors.WHITE
             self.texts[k + '_threshold'].color = ft.colors.BLUE_300 if (
@@ -647,7 +648,7 @@ def val_from_text(s):
 def str_to_tuple(s):
     s = s.replace('(', '').replace(')', '')
     vals = s.split(', ')
-    vals = [np.nan if v in ['', 'na'] else v for v in vals]
+    vals = [np.nan if v in ['', 'na'] else float(v) for v in vals]
     return tuple(vals)
 
 
