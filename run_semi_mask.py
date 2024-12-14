@@ -155,7 +155,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     img[:10, :] = 255  # make top edge white, assuming ice object suspended from top
     mask, ice = find_mask_and_ice(img)
     mask[:10, :] = 1  # add top edge back in mask
-    ice_edges = find_edges(ice, largest_only=True)
+    ice_edges = find_edges(ice, largest_only=True, remove_inside=True)
     mask_edges = find_edges(mask, remove_outside=True)
 
     if ice_edges is None or (PREV_CONTOUR_LENGTH is not None and len(ice_edges) < PREV_CONTOUR_LENGTH/4):
@@ -259,7 +259,7 @@ def find_mask_and_ice(img):
     return mask, ice
 
 
-def find_edges(img, largest_only=False, remove_outside=False):
+def find_edges(img, largest_only=False, remove_outside=False, remove_inside=False):
     if largest_only:
         cont, hierarchy = cv.findContours(img.astype(np.uint8), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
         if len(cont) == 0:
@@ -267,6 +267,18 @@ def find_edges(img, largest_only=False, remove_outside=False):
 
         idx = np.argmax([len(c) for c in cont])  # index of largest contour
         edges = np.reshape(cont[idx], (cont[idx].shape[0], 2))
+        if remove_inside:
+            xmean = np.mean(edges[:, 0])
+            nc_left, nc_right = [], []
+            cl, cr = edges[edges[:, 0] < xmean], edges[edges[:, 0] >= xmean]
+            for j in range(0, int(np.max(edges[:, 1])) + 1):
+                cl1 = cl[cl[:, 1] == j]
+                cr1 = cr[cr[:, 1] == j]
+                if len(cl1) > 0:
+                    nc_left.append(cl1[np.argmax(np.abs(cl1[:, 0] - xmean))])
+                if len(cr1) > 0:
+                    nc_right.insert(0, cr1[np.argmax(np.abs(cr1[:, 0] - xmean))])
+            edges = np.array(nc_left + nc_right)
         return edges
     else:
         conts, hierarchy = cv.findContours(img.astype(np.uint8), cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
