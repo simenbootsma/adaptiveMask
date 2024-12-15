@@ -12,15 +12,31 @@ import shutil
 matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
-IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/'  # folder where images ares saved
-ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128/'  # folder for communicating with external computer
-ARROW_UP, ARROW_DOWN, ARROW_LEFT, ARROW_RIGHT = 'u', 'd', 'M', 'm'
+IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241215/'  # folder where images ares saved
+ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241215/'  # folder for communicating with external computer
+PREV_CONTOUR_LENGTH = None
+
+TARGETS = {
+    'm': 0,    # desired difference in white area between left and right in camera pixels
+    'w': 350,  # desired difference in mask and ice width in camera pixels
+    'h': 150,  # desired distance between mask and ice tip in camera pixels
+    'k': 1,    # desired white area ratio between tip and full cylinder
+}
+
+THRESHOLDS = {
+    'm': 30,   # minimum deviation from target in camera pixels
+    'w': 30,   # maximum deviation from target in camera pixels
+    'h': 30,   # maximum deviation from target in camera pixels
+    'k': 0.3,  # maximum deviation from target ratio
+}
 
 
 def main(save_contours=True):
+    global THRESHOLDS
     # initialize
     cyl = Cylinder(resolution=(1920, 1080))
     cyl.sensitivity = 10  # sensitivity in screen pixels
+
     cv_window()
     log_file = open('logs/log' + datetime_string() + '.txt', 'w')
     for s in ['jpg', 'updates', 'commands']:
@@ -58,28 +74,49 @@ def main(save_contours=True):
                 shutil.copyfile(new_images[0], ONEDRIVE_FOLDER + 'jpg/IMG_{:05d}.jpg'.format(img_count))
             img_count += 1
 
-            # auto-update screen
-            auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
-            for a in auto_actions:
-                cyl.handle_key(a)
-            log_actions(log_file, auto_actions, auto=True)
-            if errors is not None:
-                give_update(errors, cyl, img_count)
+            try:
+                # auto-update screen
+                auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
+                for a in auto_actions:
+                    cyl.handle_key(a)
+                if len(auto_actions) > 0:
+                    log_actions(log_file, auto_actions, auto=True)
+                if errors is not None and not DEMO:
+                    give_update(errors, cyl, img_count)
+            except:
+                print("An error occurred in auto-updating the screen")
 
-        # check for external commands and update screen
-        command_files = [fpath for fpath in glob(ONEDRIVE_FOLDER + 'commands/*.txt') if fpath not in command_paths]
-        command_actions = []
-        for cf in command_files:
-            print('received file!')
-            time.sleep(0.5)  # wait before reading to make sure file is closed
-            command_actions += list(open(cf, 'r').read())
-            command_paths.append(cf)
-        if len(command_actions) > 0:
-            print(command_actions)
-        command_actions = [ca for ca in command_actions if ca.lower() in 'swhkm']
-        for a in command_actions:
-            cyl.handle_key(a)
-        log_actions(log_file, command_actions, auto=False)
+        try:
+            # check for external commands and update screen
+            command_files = [fpath for fpath in sorted(glob(ONEDRIVE_FOLDER + 'commands/*.txt')) if fpath not in command_paths]
+            command_actions = []
+            for cf in command_files:
+                print('received file!')
+                time.sleep(0.5)  # wait before reading to make sure file is closed
+                command_actions += read_command(cf)
+                command_paths.append(cf)
+            if len(command_actions) > 0:
+                print(command_actions)
+                log_actions(log_file, command_actions, auto=False)
+            for a in command_actions:
+                if len(a) > 1 and 'threshold' in a[0]:
+                    THRESHOLDS[a[0][0]] = a[1]
+                elif len(a) > 1 and 'target' in a[0]:
+                    TARGETS[a[0][0]] = a[1]
+                elif len(a) > 1:
+                    match a[0]:
+                        case 'm':
+                            cyl.set_center(int(a[1]))
+                        case 'w':
+                            cyl.set_width(int(a[1]))
+                        case 'h':
+                            cyl.set_height(int(a[1]))
+                        case 'k':
+                            cyl.set_curvature(a[1])
+                else:
+                    cyl.handle_key(a)
+        except:
+            print("An error occurred in updating the mask via commands")
 
         # handle key presses
         key = cv.waitKey(10)
@@ -102,6 +139,8 @@ def main(save_contours=True):
 
 
 def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False):
+    global PREV_CONTOUR_LENGTH, THRESHOLDS, TARGETS
+
     """ Find which buttons should be pressed to improve masking.
     NOTE: Assumes vertical cylinder suspended from the top.
     Saves ice contours in save_folder. """
@@ -109,23 +148,22 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     # settings
     sensitivity_small = 2
     sensitivity_large = 10
-    x_thresh = 0.1  # minimum difference in white area between left and right before moving laterally
-    w_thresh = 200  # maximum difference in mask and ice width in camera pixels
-    h_thresh = 100  # maximum distance between mask and ice tip in camera pixels
-    k_thresh = 1      # maximum deviation from width at bottom in camera pixels
 
     # setup
     actions = []
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-    img[:10, :] = 255  # make top edge white, assuming ice object suspended from top
     mask, ice = find_mask_and_ice(img)
     mask[:10, :] = 1  # add top edge back in mask
-    ice_edges = find_edges(ice, largest_only=True)
+    ice_edges = find_edges(ice, largest_only=True, remove_inside=True)
     mask_edges = find_edges(mask, remove_outside=True)
 
-    if ice_edges is None:
+    if ice_edges is None or (PREV_CONTOUR_LENGTH is not None and len(ice_edges) < PREV_CONTOUR_LENGTH/4):
         print("[compute_actions]: no ice detected")
-        return ['w', 'h', 'K'], None  # if no ice is detected, increase width and height, decrease curvature
+        if return_errors:
+            return ['w', 'h', 'K'], None
+        return ['w', 'h', 'K']  # if no ice is detected, increase width and height, decrease curvature
+
+    PREV_CONTOUR_LENGTH = len(ice_edges)
 
     if save_folder is not None:
         # Save ice contour
@@ -133,58 +171,57 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
         fname = "contour_h{:02d}m{:02d}s{:02d}_us{:06d}.npy".format(now.hour, now.minute, now.second, now.microsecond)
         np.save(save_folder + '/' + fname, ice_edges)
 
-    M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
-
-    # Move left/right?
-    cx = int(np.mean(ice_edges[:, 0]))
-    x_diff = (np.sum(M[:, cx:]) - np.sum(M[:, :cx]))/np.sum(M)  # normalised difference in white area between left and right side of the cylinder
-
     # Adjust width
-    min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
-    sorted_ice_edges_x = np.sort(ice_edges[:, 0])
-    max_width = np.mean(sorted_ice_edges_x[max_ind:]) - np.mean(sorted_ice_edges_x[:min_ind])  # difference between average top and bottom 2% of x-coordinates
-    max_width_mask = np.max(mask_edges[:, 0]) - np.min(mask_edges[:, 0])
-    w_diff = max_width_mask - max_width
+    xmean_ice = np.mean(ice_edges[:, 0])
+    dy = 10  # bin size in pixels
+    ice_bins = [ice_edges[np.abs(ice_edges[:, 1] - j * dy) <= dy / 2, :] for j in range(int(img.shape[0] / dy))]
+    ice_bins = [[b[b[:, 0] < xmean_ice], b[b[:, 0] > xmean_ice]] for b in ice_bins]  # split into left and right
+    ice_widths = [np.nan if (len(rb) == 0 or len(lb) == 0) else np.max(rb[:, 0]) - np.min(lb[:, 0]) for lb, rb in
+                  ice_bins]
+    mask_bins = [mask_edges[np.abs(mask_edges[:, 1] - j * dy) <= dy / 2, :] for j in range(int(img.shape[0] / dy))]
+    mask_bins = [[b[b[:, 0] < xmean_ice], b[b[:, 0] > xmean_ice]] for b in mask_bins]  # split into left and right
+    mask_widths = [np.nan if (len(rb) == 0 or len(lb) == 0) else np.max(rb[:, 0]) - np.min(lb[:, 0]) for lb, rb in
+                   mask_bins]
+
+    width_diffs = np.array(mask_widths) - np.array(ice_widths)
+    width_diffs = width_diffs[~np.isnan(width_diffs)]
+    w_diff = np.sort(width_diffs)[int(.02 * len(width_diffs))]  # take value at 2% instead of min to ignore extreme values
+
+    # Adjust position
+    white_space_left = [np.nan if (len(ice_bins[j][0]) == 0 or len(mask_bins[j][0]) == 0)
+                        else np.abs(np.min(ice_bins[j][0][:, 0]) - np.min(mask_bins[j][0][:, 0]))
+                        for j in range(len(ice_bins))]
+    white_space_right = [np.nan if (len(ice_bins[j][1]) == 0 or len(mask_bins[j][1]) == 0)
+                         else np.abs(np.min(ice_bins[j][1][:, 0]) - np.min(mask_bins[j][1][:, 0]))
+                         for j in range(len(ice_bins))]
+    x_diff = np.nanmean(white_space_right) - np.nanmean(white_space_left)
 
     # Adjust height
+    min_ind, max_ind = int(0.02 * len(ice_edges)), int(0.98 * len(ice_edges))
     tip_y = int(np.mean(np.sort(ice_edges[:, 1])[max_ind:]))
     mask_tip_y = np.max(mask_edges[:, 1])
     h_diff = mask_tip_y - tip_y
 
     # Adjust curvature
+    M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
     avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
     tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
-    if np.max(tip_iw_ratio) > avg_iw_ratio:
-        k_diff = avg_iw_ratio/np.max(tip_iw_ratio) - 1
-    else:
-        k_diff = avg_iw_ratio / np.min(tip_iw_ratio) - 1
+    k_diff = avg_iw_ratio / np.max(tip_iw_ratio)
+    # if np.max(tip_iw_ratio) > avg_iw_ratio:
+    #     k_diff = avg_iw_ratio / np.max(tip_iw_ratio)
+    # else:
+    #     k_diff = avg_iw_ratio / np.min(tip_iw_ratio)
+
+    errors = {'m': x_diff - TARGETS['m'], 'h': h_diff - TARGETS['h'], 'w': w_diff - TARGETS['w'], 'k': TARGETS['k'] - k_diff}
 
     # Make action list
-    if abs(x_diff) > x_thresh:
-        s = sensitivity_large if abs(x_diff) > 2 * x_thresh else sensitivity_small
-        actions.append((ARROW_LEFT if x_diff > 0 else ARROW_RIGHT, s))
-
-    if abs(w_diff) > w_thresh:
-        # print(abs(w_diff) - w_thresh)
-        s = sensitivity_large if abs(w_diff) > 2 * w_thresh else sensitivity_small
-        actions.append(("W" if w_diff > 0 else "w", s))
-
-    changing_height = False
-    if abs(h_diff) > h_thresh:
-        # print(abs(h_diff) - h_thresh)
-        s = sensitivity_large if abs(h_diff) > 2 * h_thresh else sensitivity_small
-        actions.append(("H" if h_diff > 0 else "h", s))
-        changing_height = True
-
-    if abs(k_diff) > k_thresh and not changing_height:
-        s = sensitivity_large if abs(k_diff) > 2 * k_thresh else sensitivity_small
-        actions.append(("k" if k_diff > 0 else "K", s))
+    for k in errors:
+        if abs(errors[k]) > THRESHOLDS[k]:
+            s = sensitivity_large if abs(errors[k]) > 2 * THRESHOLDS[k] else sensitivity_small
+            actions.append((k.upper() if errors[k] > 0 else k.lower(), s))
 
     err_str = [
-        " ok " if abs(x_diff) <= x_thresh else "{:.02f}".format(x_diff / x_thresh),
-        " ok " if abs(w_diff) <= w_thresh else "{:.02f}".format(w_diff / w_thresh),
-        " ok " if abs(h_diff) <= h_thresh else "{:.02f}".format(h_diff / h_thresh),
-        " ok " if abs(k_diff) <= k_thresh else "{:.02f}".format(k_diff / k_thresh),
+        " ok " if abs(errors[k]) <= THRESHOLDS[k] else "{:.02f}".format(errors[k] / THRESHOLDS[k]) for k in errors
     ]
 
     # add colours
@@ -196,18 +233,21 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
         else:
             err_str[i] = "\033[31m" + err_str[i] + "\033[0m"
     count_str = "" if count is None else "[IMG {:d}]".format(count)
-    print("\r"+count_str+" Errors  |  x: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
+    print("\r"+count_str+" Errors  |  m: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
 
     if return_errors:
-        errors = {'x': (x_diff, x_diff/x_thresh), 'w': (w_diff, w_diff/w_thresh), 'h': (h_diff, h_diff/h_thresh),
-                  'k': (k_diff, k_diff/k_thresh)}  # tuples of absolute and relative errors
-        return actions, errors
+        err_dct = {k: (errors[k], THRESHOLDS[k], TARGETS[k]) for k in errors}
+        return actions, err_dct
     return actions
 
 
 def find_mask_and_ice(img):
     # assumes gray image
     ret, otsu = cv.threshold(img.astype(np.uint8), 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+
+    start_ind = [i for i in range(otsu.shape[0]) if np.any(otsu[i, :] > 0)][0]
+    otsu = otsu[start_ind:, :]  # skip black part on top
+    otsu[:10, :] = 255  # make top edge white, assuming ice object suspended from top
 
     s0, s1 = otsu.shape
     mask = np.zeros(otsu.shape)
@@ -222,7 +262,7 @@ def find_mask_and_ice(img):
     return mask, ice
 
 
-def find_edges(img, largest_only=False, remove_outside=False):
+def find_edges(img, largest_only=False, remove_outside=False, remove_inside=False):
     if largest_only:
         cont, hierarchy = cv.findContours(img.astype(np.uint8), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_NONE)
         if len(cont) == 0:
@@ -230,6 +270,18 @@ def find_edges(img, largest_only=False, remove_outside=False):
 
         idx = np.argmax([len(c) for c in cont])  # index of largest contour
         edges = np.reshape(cont[idx], (cont[idx].shape[0], 2))
+        if remove_inside:
+            xmean = np.mean(edges[:, 0])
+            nc_left, nc_right = [], []
+            cl, cr = edges[edges[:, 0] < xmean], edges[edges[:, 0] >= xmean]
+            for j in range(0, int(np.max(edges[:, 1])) + 1):
+                cl1 = cl[cl[:, 1] == j]
+                cr1 = cr[cr[:, 1] == j]
+                if len(cl1) > 0:
+                    nc_left.append(cl1[np.argmax(np.abs(cl1[:, 0] - xmean))])
+                if len(cr1) > 0:
+                    nc_right.insert(0, cr1[np.argmax(np.abs(cr1[:, 0] - xmean))])
+            edges = np.array(nc_left + nc_right)
         return edges
     else:
         conts, hierarchy = cv.findContours(img.astype(np.uint8), cv.RETR_LIST, cv.CHAIN_APPROX_NONE)
@@ -257,14 +309,25 @@ def cv_window():
 
 
 def fake_img(cyl, n=0):
-    arr = np.load('test_data/test_data7.npy')
-    n = min(n, arr.shape[-1]-1)
-    ice = arr[:, :, n]
+    # return np.flipud(np.transpose(plt.imread('/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241128' + '/jpg/IMG_{:05d}.jpg'.format(n+9)), (1, 0, 2)))
+
+    # files = sorted(glob('auto_contours/ice_contours20241128_104800/*.npy'))
+    files = sorted(glob('auto_contours/ice_contours20241213_173608/*.npy'))
+    n = min(len(files)-1, n)
+    c = np.load(files[n])
+
+    # ice = 255 * np.ones((4128, 2752), np.uint8)
+    ice = 255 * np.ones((8256, 5504), np.uint8)
+    ice = cv.fillPoly(ice, [c.astype(np.int32)], (0, 0, 0))
+
+    # arr = np.load('test_data/test_data7.npy')
+    # n = min(n//2, arr.shape[-1]-1)
+    # ice = arr[:, :, n]
     screen = cv.cvtColor(cyl.get_img(), cv.COLOR_RGB2GRAY)
-    img = cv.resize(screen, (2 * cyl.resolution[0], 2*cyl.resolution[1]))
-    ice = cv.resize(ice, (2*ice.shape[1], 2*ice.shape[0]))
-    h, w = ice.shape
-    img[:h, (img.shape[1]//2-w//2):(img.shape[1]//2-w//2+w)] -= np.flipud(ice)
+    screen = cv.resize(screen, (ice.shape[1], ice.shape[0]))
+
+    ice[screen == 0] = 0
+    img = ice
 
     # Triangle
     # img = cv.fillPoly(img, [np.fliplr(np.array([[0, 1850], [0, 2150], [900, 2000], [0, 1850]]))], color=(0, 0, 0))
@@ -303,6 +366,27 @@ def give_update(errors, cyl, img_count):
 
     f.write("\n".join(parameters + errors))
     f.close()
+
+
+def read_command(filename):
+    allowed_actions = [c for c in 'swhkmg']
+    actions = []
+    try:
+        file = open(filename, 'r')
+        for ln in file.readlines():
+            ln = ln.replace('\n', '')
+            if '(' in ln:
+                for c in "'()":
+                    ln = ln.replace(c, '')
+                key, val = ln.split(', ')
+                if (key in allowed_actions) or ('target' in key) or ('threshold' in key):
+                    actions.append((key, float(val)))
+            else:
+                actions += [c for c in ln if c in allowed_actions]
+        file.close()
+    except:
+        print("Could not read command '{:s}'".format(filename))
+    return actions
 
 
 if __name__ == '__main__':
