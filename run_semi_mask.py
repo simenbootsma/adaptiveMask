@@ -12,8 +12,8 @@ import shutil
 matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
-IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241214/'  # folder where images ares saved
-ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241214/'  # folder for communicating with external computer
+IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241215/'  # folder where images ares saved
+ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241215/'  # folder for communicating with external computer
 PREV_CONTOUR_LENGTH = None
 
 TARGETS = {
@@ -36,7 +36,7 @@ def main(save_contours=True):
     # initialize
     cyl = Cylinder(resolution=(1920, 1080))
     cyl.sensitivity = 10  # sensitivity in screen pixels
-    cyl.transpose()
+
     cv_window()
     log_file = open('logs/log' + datetime_string() + '.txt', 'w')
     for s in ['jpg', 'updates', 'commands']:
@@ -79,7 +79,8 @@ def main(save_contours=True):
                 auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
                 for a in auto_actions:
                     cyl.handle_key(a)
-                log_actions(log_file, auto_actions, auto=True)
+                if len(auto_actions) > 0:
+                    log_actions(log_file, auto_actions, auto=True)
                 if errors is not None and not DEMO:
                     give_update(errors, cyl, img_count)
             except:
@@ -96,6 +97,7 @@ def main(save_contours=True):
                 command_paths.append(cf)
             if len(command_actions) > 0:
                 print(command_actions)
+                log_actions(log_file, command_actions, auto=False)
             for a in command_actions:
                 if len(a) > 1 and 'threshold' in a[0]:
                     THRESHOLDS[a[0][0]] = a[1]
@@ -113,7 +115,6 @@ def main(save_contours=True):
                             cyl.set_curvature(a[1])
                 else:
                     cyl.handle_key(a)
-            log_actions(log_file, command_actions, auto=False)
         except:
             print("An error occurred in updating the mask via commands")
 
@@ -152,7 +153,6 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     actions = []
     # img = img[:, 500:-500]
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-    img[:10, :] = 255  # make top edge white, assuming ice object suspended from top
     mask, ice = find_mask_and_ice(img)
     mask[:10, :] = 1  # add top edge back in mask
     ice_edges = find_edges(ice, largest_only=True, remove_inside=True)
@@ -245,6 +245,10 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
 def find_mask_and_ice(img):
     # assumes gray image
     ret, otsu = cv.threshold(img.astype(np.uint8), 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
+
+    start_ind = [i for i in range(otsu.shape[0]) if np.any(otsu[i, :] > 0)][0]
+    otsu = otsu[start_ind:, :]  # skip black part on top
+    otsu[:10, :] = 255  # make top edge white, assuming ice object suspended from top
 
     s0, s1 = otsu.shape
     mask = np.zeros(otsu.shape)
