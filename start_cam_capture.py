@@ -8,8 +8,8 @@ cam_control_cmd_path = 'C:/Program Files (x86)/digiCamControl/CameraControlCmd.e
 cam = Camera(cam_control_cmd_path, save_folder=SAVE_FOLDER, image_type='NEF')
 
 
-def main(args):
-    if len(args) > 1:
+def main(args=None):
+    if args is not None and len(args) > 1:
         dt = float(args[1])
     else:
         dt = 30  # default time interval of 10 seconds
