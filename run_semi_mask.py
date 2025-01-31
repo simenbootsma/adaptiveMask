@@ -8,12 +8,13 @@ from datetime import datetime
 import time
 from glob import glob
 import shutil
+import rawpy
 
 matplotlib.use('Qt5Agg')
 
 DEMO = False  # run mask with existing data
-IMG_FOLDER = '/Users/simenbootsma/Documents/PhD/Work/Vertical cylinder/ColdRoom/ColdVC_20241215/'  # folder where images ares saved
-ONEDRIVE_FOLDER = '/Users/simenbootsma/OneDrive - University of Twente/VC_coldroom/ColdVC_20241215/'  # folder for communicating with external computer
+IMG_FOLDER = 'C:/Users/local.la/Documents/Simen/ColdRoom/working_folder/'  # folder where images ares saved
+ONEDRIVE_FOLDER = 'C:/Users/local.la/Sync/sync_folder/'  # folder for communicating with external computer
 PREV_CONTOUR_LENGTH = None
 
 TARGETS = {
@@ -52,14 +53,14 @@ def main(save_contours=True):
     # start program
     img_count = 0
     auto_enabled = True
-    img_paths = glob(IMG_FOLDER + '*.JPG')
+    img_paths = glob(IMG_FOLDER + '*.NEF')
     command_paths = glob(ONEDRIVE_FOLDER + 'commands/*.txt')
 
     if DEMO:
         plt.ion()
         fig, ax = plt.subplots()
     while True:
-        new_images = sorted([fn for fn in glob(IMG_FOLDER + "*.JPG") if fn not in img_paths])
+        new_images = sorted([fn for fn in glob(IMG_FOLDER + "*.NEF") if fn not in img_paths])
         if auto_enabled and (len(new_images) > 0 or DEMO):
             if DEMO:
                 img = fake_img(cyl, img_count)  # for testing purposes
@@ -69,14 +70,19 @@ def main(save_contours=True):
                 plt.pause(0.01)
             else:
                 time.sleep(.5)
-                img = cv.imread(new_images[0])
+                if 'NEF' in new_images[0]:
+                    img = rawpy.imread(new_images[0]).postprocess()
+                else:
+                    img = cv.imread(new_images[0])
                 img_paths.append(new_images[0])
-                shutil.copyfile(new_images[0], ONEDRIVE_FOLDER + 'jpg/IMG_{:05d}.jpg'.format(img_count))
+                small_img = cv.resize(img, (img.shape[1]//8, img.shape[0]//8))
+                cv.imwrite(ONEDRIVE_FOLDER + 'jpg/IMG_{:05d}.jpg'.format(img_count), small_img)
             img_count += 1
 
+            auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
             try:
                 # auto-update screen
-                auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
+                
                 for a in auto_actions:
                     cyl.handle_key(a)
                 if len(auto_actions) > 0:
@@ -154,6 +160,7 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
     mask, ice = find_mask_and_ice(img)
     mask[:10, :] = 1  # add top edge back in mask
+    mask = cv.dilate(mask, kernel=np.ones((3, 3)))
     ice_edges = find_edges(ice, largest_only=True, remove_inside=True)
     mask_edges = find_edges(mask, remove_outside=True)
 
@@ -202,6 +209,16 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     mask_tip_y = np.max(mask_edges[:, 1])
     h_diff = mask_tip_y - tip_y
 
+    """
+    print(tip_y)
+    print(mask_tip_y)
+    print(h_diff)
+    plt.imshow(mask)
+    plt.plot(ice_edges[:, 0], ice_edges[:, 1], 'r')
+    plt.plot(mask_edges[:, 0], mask_edges[:, 1], 'm')
+    plt.show()
+    """
+
     # Adjust curvature
     M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
     avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
@@ -221,19 +238,19 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
             actions.append((k.upper() if errors[k] > 0 else k.lower(), s))
 
     err_str = [
-        " ok " if abs(errors[k]) <= THRESHOLDS[k] else "{:.02f}".format(errors[k] / THRESHOLDS[k]) for k in errors
+        k + ": ok " if abs(errors[k]) <= THRESHOLDS[k] else k + ": {:.02f}".format(errors[k] / THRESHOLDS[k]) for k in errors
     ]
 
     # add colours
-    for i in range(len(err_str)):
-        if err_str[i] == ' ok ':
-            err_str[i] = '\033[32m ok \033[0m'
-        elif abs(float(err_str[i])) <= 2:
-            err_str[i] = "\033[33m" + err_str[i] + "\033[0m"
-        else:
-            err_str[i] = "\033[31m" + err_str[i] + "\033[0m"
+    #for i in range(len(err_str)):
+     #   if err_str[i] == ' ok ':
+      #      err_str[i] = '\033[32m ok \033[0m'
+       # elif abs(float(err_str[i])) <= 2:
+        #    err_str[i] = "\033[33m" + err_str[i] + "\033[0m"
+        #else:
+         #   err_str[i] = "\033[31m" + err_str[i] + "\033[0m"
     count_str = "" if count is None else "[IMG {:d}]".format(count)
-    print("\r"+count_str+" Errors  |  m: {:s}  | w: {:s}  | h: {:s}  | k: {:s} ".format(*err_str), end='')
+    print("\r"+count_str+" Errors  |  {:s}  | {:s}  | {:s}  | {:s} ".format(*err_str), end='')
 
     if return_errors:
         err_dct = {k: (errors[k], THRESHOLDS[k], TARGETS[k]) for k in errors}
