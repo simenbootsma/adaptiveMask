@@ -12,8 +12,8 @@ class AutoMask:
         self.sensitivity = 0.2  # multiplier for the error
 
     def update(self, img):
-        y, err_l, err_r = compute_errors_plotting(img)
-        # y, err_l, err_r = compute_errors(img)
+        # y, err_l, err_r = compute_errors_plotting(img)
+        y, err_l, err_r = compute_errors(img)
 
         screen = self.mask.copy()
         screen[:10, :] = 0
@@ -175,12 +175,12 @@ def compute_errors_plotting(img):
     center_x = int((top[0] + bottom[0]) / 2)
     top_y = int(top[1])
     bot_y = int(bottom[1])
-    #
-    # plt.figure()
-    # plt.imshow(mat)
-    #
-    # plt.plot(top[0], top[1], '^')
-    # plt.plot(bottom[0], bottom[1], 'v')
+
+    plt.figure()
+    plt.imshow(mat)
+
+    plt.plot(top[0], top[1], '^')
+    plt.plot(bottom[0], bottom[1], 'v')
 
     left = mat[:, :center_x]
     right = mat[:, center_x:]

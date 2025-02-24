@@ -6,9 +6,9 @@ def find_mask_and_ice(img):
     # assumes gray image and assumes object suspended from the top
     ret, otsu = cv.threshold(img.astype(np.uint8), 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
 
-    start_ind = [i for i in range(otsu.shape[0]) if np.any(otsu[i, :] > 0)][0]
-    otsu = otsu[start_ind:, :]  # skip black part on top
-    otsu[:10, :] = 255  # make top edge white
+    # start_ind = [i for i in range(otsu.shape[0]) if np.any(otsu[i, :] > 0)][0]
+    # otsu = otsu[start_ind:, :]  # skip black part on top
+    # otsu[:10, :] = 255  # make top edge white
 
     s0, s1 = otsu.shape
     mask = np.zeros(otsu.shape)
@@ -20,7 +20,7 @@ def find_mask_and_ice(img):
             mask[m[1:-1, 1:-1] == 1] = 1
     ice = np.where(otsu == 255, 0, 1)
     ice[mask==1] = 0
-    mask[:10, :] = 1  # add top edge back in
+    # mask[:10, :] = 1  # add top edge back in
     return mask, ice
 
 
