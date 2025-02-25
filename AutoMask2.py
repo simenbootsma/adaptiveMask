@@ -7,14 +7,13 @@ from ManualMask import Cylinder
 class AutoMask:
     def __init__(self):
         self.mask = cv.cvtColor(init_manual_mask(), cv.COLOR_RGB2GRAY)
-        self.sensitivity = 0.5  # multiplier for the error
-        self.eta = 20  # target width in camera pixels
+        self.sensitivity = 0.02  # multiplier for the error
+        self.eta = 50  # target width in camera pixels
 
     def update(self, img, show=False):
         img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
         mask, ice = find_mask_and_ice(img)
 
-        ice = cv.blur(ice, (11, 11))
         ice_edges = find_edges(ice, largest_only=True, remove_inside=False)
 
         if ice_edges is None:
@@ -80,10 +79,26 @@ class AutoMask:
         # d_right = d_right[::2]
         # # centerline = (centerline[::2]//2)
 
+        top, bot = 500, 800
+        # top, bot = 0, 1500
+
+        x, xp = np.arange(self.mask.shape[0]), np.linspace(top, bot, img.shape[0])
+        dx_left = np.interp(x, xp, dx_left)
+        d_left = np.interp(x, xp, d_left)
+        dx_right = np.interp(x, xp, dx_right)
+        d_right = np.interp(x, xp, d_right)
+
         dx_left = np.sign(dx_left)
         dx_right = np.sign(dx_right)
 
-        clw = np.array([np.sum(1-mask[i, :centerline[i]] == 0) for i in range(len(centerline))])
+        mask_cl = np.array([np.mean(np.where(self.mask[i, :] == 0)) for i in range(self.mask.shape[0])])
+        idx = np.arange(len(mask_cl))
+        mask_cl = np.interp(idx, idx[~np.isnan(mask_cl)], mask_cl[~np.isnan(mask_cl)])
+        mask_cl = mask_cl.astype(np.int32)
+
+        clw = np.array([np.sum(self.mask[i, :mask_cl[i]] == 0) for i in range(len(mask_cl))])
+        crw = np.array([np.sum(self.mask[i, mask_cl[i]:] == 0) for i in range(len(mask_cl))])
+
         # clw = clw[::2]//2
         lw = clw + dx_left * np.abs(d_left - self.eta) * self.sensitivity
         lw = lw.astype(np.int32)
@@ -95,7 +110,6 @@ class AutoMask:
                 new_mask[i, :lw[i]] = 0
                 dm[i, :lw[i], 0] = 1
 
-        crw = np.array([np.sum(1-mask[i, centerline[i]:] == 0) for i in range(len(centerline))])
         # crw = crw[::2]//2
         rw = crw + dx_right * np.abs(d_right - self.eta) * self.sensitivity
         rw = rw.astype(np.int32)
@@ -492,8 +506,8 @@ class AutoMask:
 
 
 def init_manual_mask():
-    im = np.zeros((500, 500, 3), dtype=np.uint8)
-    im[50:450, 50:450] = 255
+    im = np.zeros((1500, 500, 3), dtype=np.uint8)
+    im[50:1450, 50:450] = 255
     # cv.circle(im, (500, 500), 400, color=(255, 255, 255), thickness=-1)
     return im
 
