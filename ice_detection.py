@@ -13,7 +13,8 @@ def find_mask_and_ice(img):
     s0, s1 = otsu.shape
     mask = np.zeros(otsu.shape)
     edge_centers = [(0, s1//2), (s0//2, 0), (s0-1, s1//2), (s0//2, s1-1)]  # left, top, right, bottom
-    for i, j in edge_centers:
+    corners = [(0, 0), (s0-1, 0), (s0 - 1, s1-1), (0, s1 - 1)]  # left, top, right, bottom
+    for i, j in corners:
         if mask[i, j] == 0 and otsu[i, j] == 0:
             empty_mat = np.zeros((s0 + 2, s1 + 2), dtype=np.uint8)
             _, _, m, _ = cv.floodFill(otsu.copy(), empty_mat, (j, i), 0)
