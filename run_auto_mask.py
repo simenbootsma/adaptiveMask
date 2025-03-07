@@ -5,8 +5,10 @@ from glob import glob
 import rawpy
 import flet as ft
 from multiprocessing import Process, Queue
+import numpy as np
 
 IMG_FOLDER = 'C:/Users/local.la/Documents/Simen/ColdRoom/working_folder/'  # folder where images ares saved
+DEMO = True
 
 
 def main():
@@ -51,14 +53,19 @@ def gui(page: ft.Page):
 
 def show_mask(q: Queue):
     # initialize mask
-    mask = AutoMask()
+    mask = AutoMask(transposed=True)
     func_map = {'sensitivity': mask.set_sensitivity, 'eta': mask.set_eta, 'ncp': mask.set_ncp}
     cv_window()
     img_paths = glob(IMG_FOLDER + '*.NEF')
 
+    cnt = 0
     while True:
         new_images = sorted([fn for fn in glob(IMG_FOLDER + "*.NEF") if fn not in img_paths])
-        if len(new_images) > 0:
+        if DEMO:
+            img = fake_img(mask.get_img(), cnt)
+            mask.update(img)
+            cnt += 1
+        elif len(new_images) > 0:
             time.sleep(.5)
             if 'NEF' in new_images[0]:
                 img = rawpy.imread(new_images[0]).postprocess()
@@ -82,8 +89,6 @@ def show_mask(q: Queue):
         # show screen
         cv.imshow("window", mask.get_img())
 
-        print('tick')
-
         time.sleep(.1)
 
     cv.destroyWindow("window")
@@ -91,8 +96,19 @@ def show_mask(q: Queue):
 
 def cv_window():
     cv.namedWindow("window", cv.WINDOW_NORMAL)
-    cv.moveWindow("window", 900, 400)
+    cv.moveWindow("window", 0, 0)
     # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+
+
+def fake_img(screen, n):
+    dxdn = 0
+    dydn = 0
+    img = screen.copy()
+    img[(400+dxdn*n):(600-dxdn*n), :(1000-dydn*n)] = 0
+    img = img[:, 100:]
+    img = cv.resize(img, (img.shape[1], img.shape[0])).T
+    rgb = np.stack((img, img, img), axis=-1)
+    return rgb
 
 
 if __name__ == '__main__':

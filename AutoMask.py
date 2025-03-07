@@ -2,10 +2,15 @@ from ice_detection import *
 import matplotlib.pyplot as plt
 from ManualMask import Cylinder
 import cv2 as cv
+import matplotlib
+
+matplotlib.use('Qt5Agg')
 
 
 class AutoMask:
-    def __init__(self):
+    def __init__(self, transposed=False, flipped=False):
+        self.transposed = transposed
+        self.flipped = flipped
         self.display = cv.cvtColor(init_manual_mask(), cv.COLOR_RGB2GRAY)
         self.sensitivity = 0.5  # multiplier for the error NOTE: should high enough, otherwise the mask might fail due to subpixel movement
         self.eta = 100  # target width in camera pixels
@@ -31,12 +36,15 @@ class AutoMask:
         if ice_edges is None or np.sum(ice)/np.sum(mask) < 0.001:
             print('No ice!')
 
-            if show:
+            if True:
                 plt.ioff()
                 fig, ax = plt.subplots(1, 3)
                 ax[0].imshow(img)
                 ax[1].imshow(mask)
                 ax[2].imshow(ice)
+                ax[0].set_title('Photo')
+                ax[1].set_title('Mask')
+                ax[2].set_title('Ice')
                 plt.show()
 
             self.display = cv.dilate(self.display, np.ones((self.eta//2, self.eta//2)))
@@ -135,7 +143,10 @@ class AutoMask:
             plt.show()
 
     def set_eta(self, value):
-        self.eta = int(value)
+        if 1 < value < min(self.display.shape)/3:
+            self.eta = int(value)
+        else:
+            print("[AutoMask] warning: eta must be larger than 1 and smaller than 1/3 of the image width and height.")
 
     def set_sensitivity(self, value):
         if 0 < value <= 1:
@@ -147,7 +158,12 @@ class AutoMask:
         self.ncp = int(value)
 
     def get_img(self):
-        return self.display
+        disp = self.display
+        if self.flipped:
+            disp = np.flipud(disp)
+        if self.transposed:
+            disp = disp.T
+        return disp
 
     def calibrate(self, img):
         # TODO
@@ -160,7 +176,7 @@ class AutoMask:
 
         # Find location of image mask on screen mask
         factors = np.linspace(1.5, 2.5, 40)[::-1]
-        factors = np.array([2])
+        factors = np.array([1])
         values = -1 * np.ones(factors.size)
         locations = np.zeros((factors.size, 2))
         for i, fac in enumerate(factors):
@@ -220,19 +236,8 @@ class AutoMask:
 
 
 def init_manual_mask():
-    # im = np.zeros((2000, 1000, 3), dtype=np.uint8)
-    # im[200:750, 500:900] = 255
-    # # cv.circle(im, (500, 500), 400, color=(255, 255, 255), thickness=-1)
-    # return im
-    #
-    # cyl = Cylinder(resolution=(8256, 5504))
-    # cyl.transpose()
-    # cyl.set_center(4000)
-    # cyl.set_height(7500)
-    # cyl.set_width(2500)
-    # return cyl.get_img()
-
-    obj = Cylinder()
+    obj = Cylinder(resolution=(1080, 1920))
+    obj.transpose()
 
     cv.namedWindow("init", cv.WND_PROP_FULLSCREEN)
     # cv.moveWindow("window", 2000, 100)
