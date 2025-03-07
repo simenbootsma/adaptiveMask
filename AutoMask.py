@@ -1,14 +1,14 @@
-import cv2 as cv
 from ice_detection import *
 import matplotlib.pyplot as plt
 from ManualMask import Cylinder
+import cv2 as cv
 
 
 class AutoMask:
     def __init__(self):
         self.display = cv.cvtColor(init_manual_mask(), cv.COLOR_RGB2GRAY)
-        self.sensitivity = 0.9  # multiplier for the error NOTE: should high enough, otherwise the mask might fail due to subpixel movement
-        self.eta = 50  # target width in camera pixels
+        self.sensitivity = 0.5  # multiplier for the error NOTE: should high enough, otherwise the mask might fail due to subpixel movement
+        self.eta = 100  # target width in camera pixels
         self.ncp = 200  # number of control points  TODO: should depend on number of points in mask edge, each control point must have multiple corresponding mask edge points
         self.smth_n = 0#5  # number of control points to use in moving average smoothing
         self.mov_limit = 0#self.eta
@@ -134,6 +134,18 @@ class AutoMask:
                 a.tick_params(labelleft=False, labelbottom=False, left=False, bottom=False)
             plt.show()
 
+    def set_eta(self, value):
+        self.eta = int(value)
+
+    def set_sensitivity(self, value):
+        if 0 < value <= 1:
+            self.sensitivity = value
+        else:
+            print("[AutoMask] warning: sensitivity must be in the range (0, 1]")
+
+    def set_ncp(self, value):
+        self.ncp = int(value)
+
     def get_img(self):
         return self.display
 
@@ -208,30 +220,30 @@ class AutoMask:
 
 
 def init_manual_mask():
-    im = np.zeros((2000, 1000, 3), dtype=np.uint8)
-    im[200:750, 500:900] = 255
-    # cv.circle(im, (500, 500), 400, color=(255, 255, 255), thickness=-1)
-    return im
-
-    cyl = Cylinder(resolution=(8256, 5504))
-    cyl.transpose()
-    cyl.set_center(4000)
-    cyl.set_height(7500)
-    cyl.set_width(2500)
-    return cyl.get_img()
+    # im = np.zeros((2000, 1000, 3), dtype=np.uint8)
+    # im[200:750, 500:900] = 255
+    # # cv.circle(im, (500, 500), 400, color=(255, 255, 255), thickness=-1)
+    # return im
+    #
+    # cyl = Cylinder(resolution=(8256, 5504))
+    # cyl.transpose()
+    # cyl.set_center(4000)
+    # cyl.set_height(7500)
+    # cyl.set_width(2500)
+    # return cyl.get_img()
 
     obj = Cylinder()
 
-    cv.namedWindow("window", cv.WND_PROP_FULLSCREEN)
+    cv.namedWindow("init", cv.WND_PROP_FULLSCREEN)
     # cv.moveWindow("window", 2000, 100)
     # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
     while True:
-        cv.imshow("window", obj.get_img())
+        cv.imshow("init", obj.get_img())
         key = cv.waitKey()
         if key == 27:
             break
         obj.handle_key(key)
-    cv.destroyWindow("window")
+    cv.destroyWindow("init")
     return obj.get_img()
 
 

@@ -1,12 +1,12 @@
 import flet as ft
 from multiprocessing import Process
-import run_semi_mask
+import run_auto_mask
 import move_mouse
 import start_cam_capture
 
 mouse_process = Process(target=move_mouse.main)
 cam_process = Process(target=start_cam_capture.main)
-mask_process = Process(target=run_semi_mask.main)
+mask_process = Process(target=run_auto_mask.main)
 
 
 def main(page: ft.Page):
@@ -20,7 +20,7 @@ def main(page: ft.Page):
 
     def start_mask(e):
         global mask_process
-        mask_process = Process(target=run_semi_mask.main)
+        mask_process = Process(target=run_auto_mask.main)
         mask_process.start()
         run_mask_button.bgcolor = ft.colors.RED_300
         run_mask_button.color = ft.colors.RED_800
