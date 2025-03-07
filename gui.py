@@ -7,13 +7,7 @@ import cv2 as cv
 from monitor_mask import find_mask_and_ice, find_edges
 
 
-# TODO:
-#   - Implement writing with GUI
-#   - Implement changing thresholds
-#   - Graph with parameters
-#   - Live blinker
-
-FOLDER = "C:/Users/Simen/OneDrive - University of Twente/VC_coldroom/ColdVC_20241213"  # must contain jpg, updates, commands folders
+FOLDER = "/Users/simenbootsma/Sync/sync_folder"  # must contain jpg, updates, commands folders
 update_paths = sorted(glob(FOLDER + "/updates/*.txt"))
 image_paths = sorted(glob(FOLDER + "/jpg/*.jpg"))
 WINDOW_OPEN = True
@@ -63,7 +57,7 @@ def main(page: ft.Page):
             gray_img = np.mean(img, axis=2).astype(np.uint8)
             contour = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
             contour = remove_inner_contour_points(contour)
-            img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=40)
+            img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=4)
             cv.imwrite('_temp_dashboard_image.jpg', img)
             live_image.src = '_temp_dashboard_image.jpg'
         live_image.update()
