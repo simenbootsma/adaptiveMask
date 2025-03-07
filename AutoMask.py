@@ -91,6 +91,10 @@ class AutoMask:
         # (6) Move control points
         control_points = control_points + mov * self.sensitivity
 
+        if self.smth_n > 1:
+            control_points[:, 0] = smoothen_array(control_points[:, 0], n=self.smth_n)
+            control_points[:, 1] = smoothen_array(control_points[:, 1], n=self.smth_n)
+
         # (7) Generate new display
         new_display = np.zeros(self.display.shape)
         cv.fillPoly(new_display, [control_points.astype(np.int32)], (255, 255, 255))
