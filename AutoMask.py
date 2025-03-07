@@ -34,9 +34,9 @@ class AutoMask:
 
         # (1) Obtain target mask
         if ice_edges is None or np.sum(ice)/np.sum(mask) < 0.001:
-            print('No ice!')
+            print('[AutoMask] No ice!')
 
-            if True:
+            if show:
                 plt.ioff()
                 fig, ax = plt.subplots(1, 3)
                 ax[0].imshow(img)

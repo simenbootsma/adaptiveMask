@@ -89,8 +89,6 @@ def show_mask(q: Queue):
         # show screen
         cv.imshow("window", mask.get_img())
 
-        time.sleep(.1)
-
     cv.destroyWindow("window")
 
 
