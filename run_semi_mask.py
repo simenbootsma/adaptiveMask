@@ -25,7 +25,7 @@ TARGETS = {
 }
 
 THRESHOLDS = {
-    'm': 30,   # minimum deviation from target in camera pixels
+    'm': 60,   # minimum deviation from target in camera pixels
     'w': 30,   # maximum deviation from target in camera pixels
     'h': 30,   # maximum deviation from target in camera pixels
     'k': 0.1,  # maximum deviation from target ratio

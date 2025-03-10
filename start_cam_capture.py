@@ -12,14 +12,14 @@ def main(args=None):
     if args is not None and len(args) > 1:
         dt = float(args[1])
     else:
-        dt = 30  # default time interval of 10 seconds
+        dt = 10  # default time interval of 10 seconds
 
     while True:
         st = time.time()
         cam.capture_single_image()
 
         sleep_time = dt - (time.time() - st)
-        if dt <= 0:
+        if sleep_time <= 0:
             print("[cam_capture] WARNING: sleep time smaller than 0, interval time is too low ")
         else:
             time.sleep(sleep_time)
