@@ -8,7 +8,7 @@ from multiprocessing import Process, Queue
 import numpy as np
 
 IMG_FOLDER = 'C:/Users/local.la/Documents/Simen/ColdRoom/working_folder/'  # folder where images ares saved
-DEMO = True
+DEMO = False
 
 
 def main():
@@ -53,7 +53,7 @@ def gui(page: ft.Page):
 
 def show_mask(q: Queue):
     # initialize mask
-    mask = AutoMask(transposed=True)
+    mask = AutoMask(transposed=False)
     func_map = {'sensitivity': mask.set_sensitivity, 'eta': mask.set_eta, 'ncp': mask.set_ncp}
     cv_window()
     img_paths = glob(IMG_FOLDER + '*.NEF')
@@ -67,6 +67,7 @@ def show_mask(q: Queue):
             cnt += 1
         elif len(new_images) > 0:
             time.sleep(.5)
+            print('new image!')
             if 'NEF' in new_images[0]:
                 img = rawpy.imread(new_images[0]).postprocess()
             else:
@@ -93,8 +94,8 @@ def show_mask(q: Queue):
 
 
 def cv_window():
-    cv.namedWindow("window", cv.WINDOW_NORMAL)
-    cv.moveWindow("window", 0, 0)
+    cv.namedWindow("window", cv.WND_PROP_FULLSCREEN)
+    # cv.moveWindow("window", 0, 0)
     # cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
 

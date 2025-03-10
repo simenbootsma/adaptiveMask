@@ -11,7 +11,7 @@ class AutoMask:
     def __init__(self, transposed=False, flipped=False):
         self.transposed = transposed
         self.flipped = flipped
-        self.display = cv.cvtColor(init_manual_mask(), cv.COLOR_RGB2GRAY)
+        self.display = cv.cvtColor(init_manual_mask(transposed), cv.COLOR_RGB2GRAY)
         self.sensitivity = 0.5  # multiplier for the error NOTE: should high enough, otherwise the mask might fail due to subpixel movement
         self.eta = 100  # target width in camera pixels
         self.ncp = 200  # number of control points  TODO: should depend on number of points in mask edge, each control point must have multiple corresponding mask edge points
@@ -235,9 +235,10 @@ class AutoMask:
         # plt.show()
 
 
-def init_manual_mask():
+def init_manual_mask(transposed=False):
     obj = Cylinder(resolution=(1080, 1920))
-    obj.transpose()
+    if transposed:
+        obj.transpose()
 
     cv.namedWindow("init", cv.WND_PROP_FULLSCREEN)
     # cv.moveWindow("window", 2000, 100)
