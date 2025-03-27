@@ -220,22 +220,41 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     """
 
     # Adjust curvature
-    M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
-    avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
-    tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
-    k_diff = avg_iw_ratio / np.max(tip_iw_ratio)
+    i = len(ice_widths)-1
+    while np.isnan(ice_widths[i]) or ice_widths[i] < 0.9 * np.nanmean(ice_widths):
+        i = i - 1
+    tip_height = tip_y - i * dy
+    tip_width = ice_widths[i]
+
+    j = len(mask_widths)-1
+    while np.isnan(mask_widths[j]) or mask_widths[j] < 0.9 * np.nanmean(mask_widths):
+        j = j - 1
+    mask_tip_height = tip_y - j * dy
+    mask_tip_width = mask_widths[j]
+
+    k_diff = mask_tip_height/mask_tip_width - tip_height/tip_width
+
+    # M = 1 - (mask + ice)  # regions of mask and ice are 0, rest is 1
+    # avg_iw_ratio = np.sum(ice[:tip_y, :]) / np.sum(M[:tip_y, :])
+    # tip_iw_ratio = np.sum(ice[int(.9*tip_y):tip_y, :], axis=1) / np.sum(M[int(.9*tip_y):tip_y, :], axis=1)
+    # k_diff = avg_iw_ratio / np.max(tip_iw_ratio)
+
     # if np.max(tip_iw_ratio) > avg_iw_ratio:
     #     k_diff = avg_iw_ratio / np.max(tip_iw_ratio)
     # else:
     #     k_diff = avg_iw_ratio / np.min(tip_iw_ratio)
 
-    errors = {'m': x_diff - TARGETS['m'], 'h': h_diff - TARGETS['h'], 'w': w_diff - TARGETS['w'], 'k': TARGETS['k'] - k_diff}
+    errors = {'m': x_diff - TARGETS['m'], 'h': h_diff - TARGETS['h'], 'w': w_diff - TARGETS['w'], 'k': k_diff - TARGETS['k']}
 
     # Make action list
     for k in errors:
         if abs(errors[k]) > THRESHOLDS[k]:
             s = sensitivity_large if abs(errors[k]) > 2 * THRESHOLDS[k] else sensitivity_small
             actions.append((k.upper() if errors[k] > 0 else k.lower(), s))
+
+    # prioritize increasing width over increasing curvature
+    if any([a[0] == 'w' for a in actions]) and any([a[0] == 'k' for a in actions]):
+        actions = [a for a in actions if a[0] != 'k']
 
     err_str = [
         k + ": ok " if abs(errors[k]) <= THRESHOLDS[k] else k + ": {:.02f}".format(errors[k] / THRESHOLDS[k]) for k in errors
