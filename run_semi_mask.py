@@ -21,14 +21,14 @@ TARGETS = {
     'm': 0,    # desired difference in white area between left and right in camera pixels
     'w': 350,  # desired difference in mask and ice width in camera pixels
     'h': 250,  # desired distance between mask and ice tip in camera pixels
-    'k': 1,    # desired white area ratio between tip and full cylinder
+    'k': 0,    # desired difference between mask and ice tip aspect ratios
 }
 
 THRESHOLDS = {
     'm': 60,   # minimum deviation from target in camera pixels
     'w': 30,   # maximum deviation from target in camera pixels
     'h': 30,   # maximum deviation from target in camera pixels
-    'k': 0.1,  # maximum deviation from target ratio
+    'k': 0.5,  # maximum deviation from target
 }
 
 
