@@ -28,7 +28,7 @@ class Camera:
     interface."""
 
     def __init__(self, control_cmd_location: str, image_type: Optional[str] = None,
-                 collection_name: str = '', save_folder: str = getcwd()):
+                 collection_name: str = 'img', save_folder: str = getcwd()):
         """Constructor.
 
         Args:
@@ -112,7 +112,7 @@ class Camera:
         makedirs(self.save_folder, exist_ok=True)
 
         # Build image name
-        image_name = self.collection_name + '_' + str(self.image_index) + self.image_type
+        image_name = self.collection_name + '_' + '{:05d}'.format(self.image_index) + self.image_type
         # Command Camera
         system(f'\"{self.control_cmd_location}\" /filename {self.save_folder}{image_name} {command}')
 
