@@ -12,7 +12,7 @@ def main(args=None):
     if args is not None and len(args) > 1:
         dt = float(args[1])
     else:
-        dt = 10  # default time interval of 10 seconds
+        dt = 30  # default time interval of 10 seconds
 
     while True:
         st = time.time()
