@@ -13,6 +13,7 @@ image_paths = sorted(glob(FOLDER + "/jpg/*.jpg"))
 WINDOW_OPEN = True
 last_update_time = None
 start_time = None
+DASH_IMG_PATH = '/Users/simenbootsma/PycharmProjects/adaptiveMask/_temp_dashboard_image.jpg'
 
 
 def main(page: ft.Page):
@@ -50,7 +51,7 @@ def main(page: ft.Page):
     def toggle_contour(e):
         if len(image_paths) == 0:
             return
-        if live_image.src == '_temp_dashboard_image.jpg':
+        if live_image.src == DASH_IMG_PATH:
             live_image.src = image_paths[-1]
         else:
             img = cv.imread(image_paths[-1])
@@ -58,8 +59,8 @@ def main(page: ft.Page):
             contour = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
             contour = remove_inner_contour_points(contour)
             img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=4)
-            cv.imwrite('_temp_dashboard_image.jpg', img)
-            live_image.src = '_temp_dashboard_image.jpg'
+            cv.imwrite(DASH_IMG_PATH, img)
+            live_image.src = DASH_IMG_PATH
         live_image.update()
 
     contour_checkbox = ft.Checkbox(label='Show contour', on_change=toggle_contour)
@@ -189,7 +190,7 @@ def main(page: ft.Page):
             update_paths += new_updates
 
         if len(new_images) > 0:
-            show_contours = live_image.src == '_temp_dashboard_image.jpg'
+            show_contours = live_image.src == DASH_IMG_PATH
             live_image.src = new_images[-1]
             image_paths += new_images
             if show_contours:
