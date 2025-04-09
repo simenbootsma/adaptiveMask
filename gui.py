@@ -1,3 +1,5 @@
+import base64
+
 import flet as ft
 import os
 import numpy as np
@@ -12,12 +14,15 @@ update_paths = sorted(glob(FOLDER + "/updates/*.txt"))
 image_paths = sorted(glob(FOLDER + "/jpg/*.jpg"))
 WINDOW_OPEN = True
 last_update_time = None
+last_img_update_time = None
 start_time = None
 DASH_IMG_PATH = '/Users/simenbootsma/PycharmProjects/adaptiveMask/_temp_dashboard_image.jpg'
+SHOWING_CONTOUR = False
+temp_img = ''
 
 
 def main(page: ft.Page):
-    global update_paths, image_paths, WINDOW_OPEN, FOLDER, last_update_time, start_time
+    global update_paths, image_paths, WINDOW_OPEN, FOLDER, last_update_time, last_img_update_time, start_time, SHOWING_CONTOUR
     # FUNCTIONALITY
     params = ['position', 'width', 'height', 'curvature']  # parameters that will be shown
 
@@ -40,7 +45,6 @@ def main(page: ft.Page):
     page.overlay.append(data_folder_picker)
 
     live_image = ft.Image(
-        src="",
         width=300,
         height=500,
         fit=ft.ImageFit.FIT_HEIGHT,
@@ -49,19 +53,25 @@ def main(page: ft.Page):
     )
 
     def toggle_contour(e):
+        global SHOWING_CONTOUR
+        SHOWING_CONTOUR = not SHOWING_CONTOUR
+
         if len(image_paths) == 0:
             return
-        if live_image.src == DASH_IMG_PATH:
-            live_image.src = image_paths[-1]
-        else:
-            img = cv.imread(image_paths[-1])
-            gray_img = np.mean(img, axis=2).astype(np.uint8)
-            contour = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
-            contour = remove_inner_contour_points(contour)
-            img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=4)
-            cv.imwrite(DASH_IMG_PATH, img)
-            live_image.src = DASH_IMG_PATH
+
+        img = cv.imread(image_paths[-1])
+        if SHOWING_CONTOUR:
+            img = draw_contour(img)
+        b64_img = cv.imencode('.jpg', img)[1]
+        live_image.src_base64 = base64.b64encode(b64_img).decode("utf-8")
         live_image.update()
+
+    def draw_contour(img):
+        gray_img = np.mean(img, axis=2).astype(np.uint8)
+        contour = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
+        contour = remove_inner_contour_points(contour)
+        img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=4)
+        return img
 
     contour_checkbox = ft.Checkbox(label='Show contour', on_change=toggle_contour)
 
@@ -78,13 +88,31 @@ def main(page: ft.Page):
 
     save_button = ft.ElevatedButton('Save changes', on_click=save_changes)
 
+    def on_hover(e):
+        if e.control.visible:
+            if e.data == 'true':
+                p, num = e.control.key.split('_box')
+                num = int(num)
+                rel_err = cboard.rel_error_history[p][num]
+                color = e.control.bgcolor.replace('300', '800')
+                e.control.content = ft.Text("{:.2f}".format(rel_err), color=color)
+                e.control.width = 50
+                e.control.height = 50
+                e.control.alignment = ft.alignment.center
+            else:
+                e.control.content = None
+                e.control.width = 40 if '00' in e.control.key else 30
+                e.control.height = 40 if '00' in e.control.key else 30
+            e.control.update()
+
     # LAYOUT
     row_h = 25  # row height for control tab
     col_w = 100  # column width for control tab
     last_update_text = ft.Text("Last update: -",)
-    last_image_text = ft.Text("Last update: -", )
+    last_image_text = ft.Text("Last image update: -", )
     run_time_text = ft.Text("Run time     --:--:--", size=30, weight=ft.FontWeight.W_300)
-    status_boxes = {k: [ft.Container(width=40, height=40, visible=False, border_radius=3, border=ft.border.all(2, ft.colors.GREEN_50))] + [ft.Container(width=30, height=30, visible=False, border_radius=3) for _ in range(cboard.BUFFER_SIZE-1)] for k in params}
+    status_boxes = {k: [ft.Container(width=40, height=40, visible=False, border_radius=3, border=ft.border.all(2, ft.colors.GREEN_50), on_hover=on_hover, key=k+'_box00')]
+                       + [ft.Container(width=30, height=30, visible=False, border_radius=3, on_hover=on_hover, key='{:s}_box{:02d}'.format(k, i+1)) for i in range(cboard.BUFFER_SIZE-1)] for k in params}
     status_rows = [ft.Row([ft.Container(ft.Text(k, size=20, weight=ft.FontWeight.BOLD), width=100, height=50, alignment=ft.Alignment(-1, 0))] + status_boxes[k], spacing=20) for k in params]
     status_rows.insert(0, ft.Row([ft.Container(width=100, height=50), ft.Icon(ft.icons.ARROW_BACK), ft.Container(ft.Text("time", size=20, weight=ft.FontWeight.BOLD), alignment=ft.Alignment(-1, 0))], spacing=20))
 
@@ -162,7 +190,8 @@ def main(page: ft.Page):
             cboard.update(update_paths[-1])
             last_update_time = os.path.getmtime(update_paths[-1])
             start_time = os.path.getmtime(update_paths[0])
-            live_image.src = image_paths[-1]
+            b64_im = cv.imencode('.jpg', cv.imread(image_paths[-1]))[1]
+            live_image.src_base64 = base64.b64encode(b64_im).decode("utf-8")
             live_image.update()
         elif last_update_time is None:
             last_update_text.value = 'Last update: --'
@@ -171,7 +200,7 @@ def main(page: ft.Page):
             last_image_text.update()
             run_time_text.value = 'Run time     --:--:--'
             run_time_text.update()
-            live_image.src = ''
+            live_image.src_base64 = ''
             live_image.update()
             cboard.reset(None)
 
@@ -190,14 +219,16 @@ def main(page: ft.Page):
             update_paths += new_updates
 
         if len(new_images) > 0:
-            show_contours = live_image.src == DASH_IMG_PATH
-            live_image.src = new_images[-1]
+            im = cv.imread(new_images[-1])
+            if SHOWING_CONTOUR:
+                im = draw_contour(im)
+            b64_im = cv.imencode('.jpg', im)[1]
+            live_image.src_base64 = base64.b64encode(b64_im).decode("utf-8")
             image_paths += new_images
-            if show_contours:
-                toggle_contour(None)
             live_image.update()
+            last_img_update_time = time.time()
 
-        if last_update_time is not None and start_time is not None:
+        if last_update_time is not None:
             dt = time.time() - last_update_time
             if dt > 3600:
                 t_str = '{:.0f} hours'.format(dt // 3600)
@@ -207,9 +238,18 @@ def main(page: ft.Page):
                 t_str = '{:.0f} seconds'.format(dt)
             last_update_text.value = 'Last update: {:s} ago'.format(t_str)
             last_update_text.update()
-            last_image_text.value = 'Last update: {:s} ago'.format(t_str)
+        if last_img_update_time is not None:
+            dt = time.time() - last_img_update_time
+            if dt > 3600:
+                t_str = '{:.0f} hours'.format(dt // 3600)
+            elif dt > 60:
+                t_str = '{:.0f} minutes'.format(dt // 60)
+            else:
+                t_str = '{:.0f} seconds'.format(dt)
+            last_image_text.value = 'Last image update: {:s} ago'.format(t_str)
             last_image_text.update()
 
+        if start_time is not None:
             rt = int(time.time() - start_time)
             run_time_text.value = 'Run time     {:02d}:{:02d}:{:02d}'.format(rt//3600, (rt//60) % 60, rt % 60)
             run_time_text.update()
