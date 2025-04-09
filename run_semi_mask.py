@@ -69,7 +69,7 @@ def main(save_contours=True):
                 ax.set_title('Iteration {:d}'.format(img_count))
                 plt.pause(0.01)
             else:
-                time.sleep(.5)
+                time.sleep(1)
                 if 'NEF' in new_images[0]:
                     img = rawpy.imread(new_images[0]).postprocess()
                 else:

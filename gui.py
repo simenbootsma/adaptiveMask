@@ -114,7 +114,7 @@ def main(page: ft.Page):
     status_boxes = {k: [ft.Container(width=40, height=40, visible=False, border_radius=3, border=ft.border.all(2, ft.colors.GREEN_50), on_hover=on_hover, key=k+'_box00')]
                        + [ft.Container(width=30, height=30, visible=False, border_radius=3, on_hover=on_hover, key='{:s}_box{:02d}'.format(k, i+1)) for i in range(cboard.BUFFER_SIZE-1)] for k in params}
     status_rows = [ft.Row([ft.Container(ft.Text(k, size=20, weight=ft.FontWeight.BOLD), width=100, height=50, alignment=ft.Alignment(-1, 0))] + status_boxes[k], spacing=20) for k in params]
-    status_rows.insert(0, ft.Row([ft.Container(width=100, height=50), ft.Icon(ft.icons.ARROW_BACK), ft.Container(ft.Text("time", size=20, weight=ft.FontWeight.BOLD), alignment=ft.Alignment(-1, 0))], spacing=20))
+    status_rows.insert(0, ft.Row([ft.Container(width=100, height=50), ft.Container(ft.Text("<---  time", size=20, weight=ft.FontWeight.BOLD), alignment=ft.Alignment(-1, 0))], spacing=20))
 
     t = ft.Tabs(
         selected_index=0,
