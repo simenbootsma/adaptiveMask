@@ -198,7 +198,8 @@ class Cylinder:
             img = cv.blur(img.astype(np.uint8), (self.blur, self.blur))
         if self.flipped:
             img = np.flipud(img) if self.transposed else np.fliplr(img)
-        img = (img * self.contrast).astype(np.uint8)
+        if self.contrast < 1.0:
+            img = (img * self.contrast).astype(np.uint8)
         return img
 
 

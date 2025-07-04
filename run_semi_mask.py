@@ -69,11 +69,12 @@ def main(save_contours=True):
                 ax.set_title('Iteration {:d}'.format(img_count))
                 plt.pause(0.01)
             else:
-                time.sleep(.5)
+                time.sleep(1.5)
                 if 'NEF' in new_images[0]:
                     img = rawpy.imread(new_images[0]).postprocess()
                 else:
                     img = cv.imread(new_images[0])
+                img = img[:, img.shape[1]//4:-img.shape[1]//4]  # cut off sides
                 img_paths.append(new_images[0])
                 small_img = cv.resize(img, (img.shape[1]//8, img.shape[0]//8))
                 cv.imwrite(ONEDRIVE_FOLDER + 'jpg/IMG_{:05d}.jpg'.format(img_count), small_img)
@@ -91,6 +92,12 @@ def main(save_contours=True):
                     give_update(errors, cyl, img_count)
             except:
                 print("An error occurred in auto-updating the screen")
+            for a in auto_actions:
+                cyl.handle_key(a)
+            if len(auto_actions) > 0:
+                log_actions(log_file, auto_actions, auto=True)
+            if errors is not None and not DEMO:
+                give_update(errors, cyl, img_count)
 
         try:
             # check for external commands and update screen
@@ -293,8 +300,9 @@ def find_mask_and_ice(img):
             empty_mat = np.zeros((s0 + 2, s1 + 2), dtype=np.uint8)
             _, _, m, _ = cv.floodFill(otsu.copy(), empty_mat, (j, i), 0)
             mask[m[1:-1, 1:-1] == 1] = 1
-    ice = (1 - otsu.copy()/255)
+    ice = (1 - otsu/255)
     ice[mask==1] = 0
+
     return mask, ice
 
 
