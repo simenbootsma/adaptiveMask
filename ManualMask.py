@@ -286,10 +286,12 @@ CONTROLS
     right arrow : move towards black
     up arrow    : move up
     down arrow  : move down
+    b (+ shift) : increase (decrease) bottom 
+    t (+ shift) : increase (decrease) top
     s (+ shift) : increase (decrease) sensitivity
     a (+ shift) : increase (decrease) amplitude 
     w (+ shift) : increase (decrease) wavelength
-    b (+ shift) : increase (decrease) blur 
+    l (+ shift) : increase (decrease) blur 
     c (+ shift) : increase (decrease) contrast
     o           : change color
 
@@ -310,6 +312,8 @@ class ScallopyBlock:
         self.contrast = 1.0
         self.color_idx = 0
         self.color = (255, 255, 255)
+        self.top = 0
+        self.bottom = 0
 
     def move_down(self):
         self.center[0] += self.sensitivity
@@ -323,17 +327,33 @@ class ScallopyBlock:
     def move_left(self):
         self.center[1] -= self.sensitivity
 
+    def increase_top(self):
+        self.top += self.sensitivity
+
+    def decrease_top(self):
+        self.top = max(self.top - self.sensitivity, 0)
+
+    def increase_bottom(self):
+        self.bottom += self.sensitivity
+
+    def decrease_bottom(self):
+        self.bottom = max(self.bottom - self.sensitivity, 0)
+
     def increase_wavelength(self):
         self.wavelength += self.sensitivity
+        print("\raspect ratio: \033[32m{:.1f}\033[0m".format(self.wavelength / self.amplitude), end='')
 
     def decrease_wavelength(self):
-        self.wavelength -= self.sensitivity
+        self.wavelength = max(self.wavelength - self.sensitivity, 0)
+        print("\raspect ratio: \033[32m{:.1f}\033[0m".format(self.wavelength/self.amplitude), end='')
 
     def increase_amplitude(self):
         self.amplitude += self.sensitivity
+        print("\raspect ratio: \033[32m{:.1f}\033[0m".format(self.wavelength / self.amplitude), end='')
 
     def decrease_amplitude(self):
-        self.amplitude -= self.sensitivity
+        self.amplitude = max(self.amplitude - self.sensitivity, 1)
+        print("\raspect ratio: \033[32m{:.1f}\033[0m".format(self.wavelength / self.amplitude), end='')
 
     def increase_blur(self):
         self.blur += 1
@@ -349,11 +369,11 @@ class ScallopyBlock:
 
     def increase_sensitivity(self):
         self.sensitivity = min(self.resolution[1] // 3, self.sensitivity + 1)
-        print("set sensivity to {:d} px".format(self.sensitivity))
+        print("\rsensivity: \033[32m{:d}\033[0m px".format(self.sensitivity), end='')
 
     def decrease_sensivity(self):
         self.sensitivity = max(1, self.sensitivity - 1)
-        print("set sensivity to {:d} px".format(self.sensitivity))
+        print("\rsensivity: \033[32m{:d}\033[0m px".format(self.sensitivity), end='')
 
     def rotate(self):
         self.rotation = (self.rotation + 1) % 4
@@ -364,25 +384,16 @@ class ScallopyBlock:
         self.color = colors[self.color_idx]
 
     def handle_key(self, key):
-        # temporary hack to test proportionality stuff
-        s = None
-        if type(key) is tuple:
-            s = self.sensitivity
-            self.sensitivity = int(key[1])
-            key = key[0]
-
         char = key if type(key) is str else chr(key)
         func_map = {chr(1): self.move_down, chr(0): self.move_up, chr(2): self.move_left, chr(3): self.move_right,
+                    "b": self.increase_bottom, "B": self.decrease_bottom, "t": self.increase_top, "T": self.decrease_top,
                     "w": self.increase_wavelength, "W": self.decrease_wavelength,
-                    "a": self.increase_amplitude, "A": self.decrease_amplitude, "b": self.increase_blur,
-                    "B": self.decrease_blur, "r": self.rotate,
+                    "a": self.increase_amplitude, "A": self.decrease_amplitude, "l": self.increase_blur,
+                    "L": self.decrease_blur, "r": self.rotate,
                     "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,
                     "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color}
         if char in func_map:
             func_map[char]()
-
-        if s is not None:
-            self.sensitivity = s
 
     def get_img(self):
         img = np.zeros((self.resolution[0], self.resolution[1]), dtype=np.uint8)
@@ -391,6 +402,12 @@ class ScallopyBlock:
             img[int(i), j] = 255
         mask = np.zeros((img.shape[0]+2, img.shape[1]+2), dtype=np.uint8)
         _, img, _, _ = cv.floodFill(img, mask, (0, 0), (255, 255, 255))
+
+        if self.top > 0:
+            img[:self.top, :] = 0
+        if self.bottom > 0:
+            img[-self.bottom:, :] = 0
+
         if self.blur > 0:
             img = cv.blur(img.astype(np.uint8), (self.blur, self.blur))
         for _ in range(self.rotation):
