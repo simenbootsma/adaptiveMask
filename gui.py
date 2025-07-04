@@ -134,7 +134,7 @@ def main(page: ft.Page):
                             run_time_text
                         ] + status_rows, spacing=10),
                         ft.Column([last_image_text, contour_checkbox, live_image]),
-                    ], spacing=50)), margin=20
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)), margin=20
                 ),
             ),
 
