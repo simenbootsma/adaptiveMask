@@ -275,11 +275,134 @@ class Sphere:
         return img
 
 
+"""
+CONTROLS
+
+    Esc         : exit
+    Back        : reset
+    r           : rotate image by 90 degrees
+    left arrow  : move towards white
+    right arrow : move towards black
+    up arrow    : move up
+    down arrow  : move down
+    s (+ shift) : increase (decrease) sensitivity
+    a (+ shift) : increase (decrease) amplitude 
+    w (+ shift) : increase (decrease) wavelength
+    b (+ shift) : increase (decrease) blur 
+    c (+ shift) : increase (decrease) contrast
+    o           : change color
+
+    NOTE: shift + <key> will perform the inverse operation (when available)
+"""
+
+
+class ScallopyBlock:
+    def __init__(self, resolution=(1920, 1080)):
+        self.resolution = resolution
+        self.sensitivity = int(resolution[1] / 500)
+        self.center = [resolution[0]//2, resolution[1] // 2]
+        self.wavelength = resolution[1] // 10
+        self.amplitude = self.wavelength // 4
+        self.bs_height = 0
+        self.blur = 0
+        self.rotation = 1
+        self.contrast = 1.0
+        self.color_idx = 0
+        self.color = (255, 255, 255)
+
+    def move_down(self):
+        self.center[0] += self.sensitivity
+
+    def move_up(self):
+        self.center[0] -= self.sensitivity
+
+    def move_right(self):
+        self.center[1] += self.sensitivity
+
+    def move_left(self):
+        self.center[1] -= self.sensitivity
+
+    def increase_wavelength(self):
+        self.wavelength += self.sensitivity
+
+    def decrease_wavelength(self):
+        self.wavelength -= self.sensitivity
+
+    def increase_amplitude(self):
+        self.amplitude += self.sensitivity
+
+    def decrease_amplitude(self):
+        self.amplitude -= self.sensitivity
+
+    def increase_blur(self):
+        self.blur += 1
+
+    def decrease_blur(self):
+        self.blur = max(0, self.blur - 1)
+
+    def increase_contrast(self):
+        self.contrast = min(max(0., self.contrast + 0.01), 1)
+
+    def decrease_contrast(self):
+        self.contrast = min(max(0., self.contrast - 0.01), 1)
+
+    def increase_sensitivity(self):
+        self.sensitivity = min(self.resolution[1] // 3, self.sensitivity + 1)
+        print("set sensivity to {:d} px".format(self.sensitivity))
+
+    def decrease_sensivity(self):
+        self.sensitivity = max(1, self.sensitivity - 1)
+        print("set sensivity to {:d} px".format(self.sensitivity))
+
+    def rotate(self):
+        self.rotation = (self.rotation + 1) % 4
+
+    def change_color(self):
+        colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255)]
+        self.color_idx = 0 if self.color_idx == len(colors)-1 else self.color_idx + 1
+        self.color = colors[self.color_idx]
+
+    def handle_key(self, key):
+        # temporary hack to test proportionality stuff
+        s = None
+        if type(key) is tuple:
+            s = self.sensitivity
+            self.sensitivity = int(key[1])
+            key = key[0]
+
+        char = key if type(key) is str else chr(key)
+        func_map = {chr(1): self.move_down, chr(0): self.move_up, chr(2): self.move_left, chr(3): self.move_right,
+                    "w": self.increase_wavelength, "W": self.decrease_wavelength,
+                    "a": self.increase_amplitude, "A": self.decrease_amplitude, "b": self.increase_blur,
+                    "B": self.decrease_blur, "r": self.rotate,
+                    "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,
+                    "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color}
+        if char in func_map:
+            func_map[char]()
+
+        if s is not None:
+            self.sensitivity = s
+
+    def get_img(self):
+        img = np.zeros((self.resolution[0], self.resolution[1]), dtype=np.uint8)
+        for i in np.arange(0, img.shape[0], 0.2):
+            j = int(self.center[1] + self.amplitude * np.cos((i - self.center[0])*2*np.pi/self.wavelength))
+            img[int(i), j] = 255
+        mask = np.zeros((img.shape[0]+2, img.shape[1]+2), dtype=np.uint8)
+        _, img, _, _ = cv.floodFill(img, mask, (0, 0), (255, 255, 255))
+        if self.blur > 0:
+            img = cv.blur(img.astype(np.uint8), (self.blur, self.blur))
+        for _ in range(self.rotation):
+            img = cv.rotate(img, cv.ROTATE_90_CLOCKWISE)
+        img = (img * self.contrast).astype(np.uint8)
+        return img
+
+
 def main(args):
-    if len(args) < 2 or args[1] not in ['cylinder', 'sphere']:
-        print("\033[95m warning: Neither 'cylinder' nor 'sphere' given as argument, defaulting to 'cylinder'. \033[0m")
+    if len(args) < 2 or args[1] not in ['cylinder', 'sphere', 'scallops']:
+        print("\033[95m warning: Neither 'cylinder', 'sphere' nor 'scallops' given as argument, defaulting to 'cylinder'. \033[0m")
         args = ['', 'cylinder']
-    obj = {'cylinder': Cylinder, 'sphere': Sphere}[args[1]]()
+    obj = {'cylinder': Cylinder, 'sphere': Sphere, 'scallops': ScallopyBlock}[args[1]]()
 
     cv.namedWindow("window", cv.WND_PROP_FULLSCREEN)
     # cv.moveWindow("window", 2000, 100)
@@ -294,5 +417,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    main(['', 'scallops'])
+    # main(sys.argv)
 
