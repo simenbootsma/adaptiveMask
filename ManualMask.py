@@ -418,8 +418,8 @@ class ScallopyBlock:
 
 def main(args):
     if len(args) < 2 or args[1] not in ['cylinder', 'sphere', 'scallops']:
-        print("\033[95m warning: Neither 'cylinder', 'sphere' nor 'scallops' given as argument, defaulting to 'cylinder'. \033[0m")
-        args = ['', 'cylinder']
+        print("\033[95m warning: Neither 'cylinder', 'sphere' nor 'scallops' given as argument, defaulting to 'scallops'. \033[0m")
+        args = ['', 'scallops']
     obj = {'cylinder': Cylinder, 'sphere': Sphere, 'scallops': ScallopyBlock}[args[1]]()
 
     cv.namedWindow("window", cv.WND_PROP_FULLSCREEN)
@@ -435,6 +435,5 @@ def main(args):
 
 
 if __name__ == "__main__":
-    main(['', 'scallops'])
-    # main(sys.argv)
+    main(sys.argv)
 
