@@ -8,7 +8,7 @@ from datetime import datetime
 import time
 from glob import glob
 import shutil
-import rawpy
+from importlib import reload
 
 matplotlib.use('Qt5Agg')
 
@@ -33,6 +33,7 @@ THRESHOLDS = {
 
 
 def main(save_contours=True):
+    import rawpy
     global THRESHOLDS
     # initialize
     cyl = Cylinder(resolution=(1920, 1080))
@@ -70,8 +71,17 @@ def main(save_contours=True):
                 plt.pause(0.01)
             else:
                 time.sleep(1)
-                if 'NEF' in new_images[0]:
-                    img = rawpy.imread(new_images[0]).postprocess()
+                if '.NEF' in new_images[0]:
+                    try:
+                        img = rawpy.imread(new_images[0]).postprocess()
+                    except rawpy._rawpy.LibRawMemPoolOverflowError:
+                        print('ERROR: LibRawMemPoolOverflowError\ntrying to reload rawpy')
+                        rawpy = reload(rawpy)
+                        try:
+                            img = rawpy.imread(new_images[0]).postprocess()
+                        except rawpy._rawpy.LibRawMemPoolOverflowError:
+                            print('did not work, now quitting...')
+                            break
                 else:
                     img = cv.imread(new_images[0])
                 img = img[:, img.shape[1]//4:-img.shape[1]//4]  # cut off sides
