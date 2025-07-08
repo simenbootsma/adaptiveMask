@@ -81,33 +81,35 @@ def main(save_contours=True):
                             img = rawpy.imread(new_images[0]).postprocess()
                         except rawpy._rawpy.LibRawMemPoolOverflowError:
                             print('did not work, now quitting...')
-                            break
+                            img = None
                 else:
                     img = cv.imread(new_images[0])
-                img = img[:, img.shape[1]//4:-img.shape[1]//4]  # cut off sides
-                img_paths.append(new_images[0])
-                small_img = cv.resize(img, (img.shape[1]//8, img.shape[0]//8))
-                cv.imwrite(ONEDRIVE_FOLDER + 'jpg/IMG_{:05d}.jpg'.format(img_count), small_img)
+                if img is not None:
+                    img = img[:, img.shape[1]//4:-img.shape[1]//4]  # cut off sides
+                    img_paths.append(new_images[0])
+                    small_img = cv.resize(img, (img.shape[1]//8, img.shape[0]//8))
+                    cv.imwrite(ONEDRIVE_FOLDER + 'jpg/IMG_{:05d}.jpg'.format(img_count), small_img)
             img_count += 1
 
-            auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
-            try:
-                # auto-update screen
-                
+            if img is not None:
+                auto_actions, errors = compute_actions_fuzzy(img, save_folder=ic_folder, count=img_count, return_errors=True)
+                try:
+                    # auto-update screen
+                    
+                    for a in auto_actions:
+                        cyl.handle_key(a)
+                    if len(auto_actions) > 0:
+                        log_actions(log_file, auto_actions, auto=True)
+                    if errors is not None and not DEMO:
+                        give_update(errors, cyl, img_count)
+                except:
+                    print("An error occurred in auto-updating the screen")
                 for a in auto_actions:
                     cyl.handle_key(a)
                 if len(auto_actions) > 0:
                     log_actions(log_file, auto_actions, auto=True)
                 if errors is not None and not DEMO:
                     give_update(errors, cyl, img_count)
-            except:
-                print("An error occurred in auto-updating the screen")
-            for a in auto_actions:
-                cyl.handle_key(a)
-            if len(auto_actions) > 0:
-                log_actions(log_file, auto_actions, auto=True)
-            if errors is not None and not DEMO:
-                give_update(errors, cyl, img_count)
 
         try:
             # check for external commands and update screen
