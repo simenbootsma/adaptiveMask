@@ -288,6 +288,15 @@ def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False
     count_str = "" if count is None else "[IMG {:d}]".format(count)
     print("\r"+count_str+" Errors  |  {:s}  | {:s}  | {:s}  | {:s} ".format(*err_str), end='')
 
+    # Show angle
+    I25 = np.argsort(ice_edges[:, 1])[int(0.24 * len(ice_edges)):int(0.26 * len(ice_edges))]
+    I75 = np.argsort(ice_edges[:, 1])[int(0.74 * len(ice_edges)):int(0.76 * len(ice_edges))]
+    dx = np.mean(ice_edges[I75, 0]) - np.mean(ice_edges[I25, 0])
+    dy = np.mean(ice_edges[I75, 1]) - np.mean(ice_edges[I25, 1])
+
+    theta = np.arctan2(dx, dy) * 180 / np.pi
+    print("angle: {:.1f} degrees".format(theta))
+
     if return_errors:
         err_dct = {k: (errors[k], THRESHOLDS[k], TARGETS[k]) for k in errors}
         return actions, err_dct

@@ -70,6 +70,14 @@ def main(page: ft.Page):
         gray_img = np.mean(img, axis=2).astype(np.uint8)
         contour = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
         contour = remove_inner_contour_points(contour)
+        I25 = np.argsort(contour[:, 1])[int(0.24 * len(contour)):int(0.26 * len(contour))]
+        I75 = np.argsort(contour[:, 1])[int(0.74 * len(contour)):int(0.76 * len(contour))]
+        dx = np.mean(contour[I75, 0]) - np.mean(contour[I25, 0])
+        dy = np.mean(contour[I75, 1]) - np.mean(contour[I25, 1])
+
+        theta = np.arctan2(dx, dy) * 180 / np.pi
+        print("angle: {:.1} degrees".format(theta))
+
         img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=4)
         return img
 
