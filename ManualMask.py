@@ -2,6 +2,7 @@ import sys
 
 import numpy as np
 import cv2 as cv
+import matplotlib.pyplot as plt
 
 """
 CONTROLS
@@ -19,6 +20,7 @@ CONTROLS
     b (+ shift) : increase (decrease) blur 
     k (+ shift) : increase (decrease) curvature
     c (+ shift) : increase (decrease) contrast
+    o (+ shift) : change (remove) color
     g (+ shift) : increase (decrease) height of black space at cylinder base 
 
     NOTE: shift + <key> will perform the inverse operation (when available)
@@ -152,8 +154,13 @@ class Cylinder:
 
     def change_color(self):
         colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255)]
+        cmap = plt.get_cmap('hsv')
         self.color_idx = 0 if self.color_idx == len(colors)-1 else self.color_idx + 1
-        self.color = colors[self.color_idx]
+        self.color_idx = (self.color_idx + self.sensitivity / 255) % 1
+        self.color = np.array([255 * val for val in cmap(self.color_idx)[:3]])
+
+    def remove_color(self):
+        self.color = [255, 255, 255]
 
     def handle_key(self, key):
         # temporary hack to test proportionality stuff
@@ -170,7 +177,7 @@ class Cylinder:
                     "k": self.increase_curvature, "K": self.decrease_curvature, "f": self.flip,
                     "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,
                     "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color,
-                    "g": self.increase_bs_height, "G": self.decrease_bs_height}
+                    "O": self.remove_color, "g": self.increase_bs_height, "G": self.decrease_bs_height}
         if char in func_map:
             func_map[char]()
 
@@ -213,6 +220,8 @@ class Sphere:
         self.contrast = 1.0
         self.color_idx = 0
         self.color = (255, 255, 255)
+        self.rainbow = False
+        self.rainbow_size = 10
 
     def move_down(self):
         self.center[1] = min(self.resolution[1]-self.radius, self.center[1] + self.sensitivity)
@@ -254,8 +263,22 @@ class Sphere:
 
     def change_color(self):
         colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255)]
+        cmap = plt.get_cmap('hsv')
         self.color_idx = 0 if self.color_idx == len(colors)-1 else self.color_idx + 1
-        self.color = colors[self.color_idx]
+        self.color_idx = (self.color_idx + self.sensitivity / 255) % 1
+        self.color = np.array([255 * val for val in cmap(self.color_idx)[:3]])
+
+    def remove_color(self):
+        self.color = [255, 255, 255]
+
+    def toggle_rainbow(self):
+        self.rainbow = not self.rainbow
+
+    def increase_rainbow_size(self):
+        self.rainbow_size += self.sensitivity
+
+    def decrease_rainbow_size(self):
+        self.rainbow_size = max(5, self.rainbow_size - self.sensitivity)
 
     def handle_key(self, key):
         char = chr(key)
@@ -263,13 +286,21 @@ class Sphere:
                     "r": self.increase_radius, "R": self.decrease_radius, "b": self.increase_blur,
                     "B": self.decrease_blur,
                     "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,
-                    "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color}
+                    "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color,
+                    "O": self.remove_color,
+                    "/": self.toggle_rainbow, ",": self.decrease_rainbow_size, ".": self.increase_rainbow_size}
         if char in func_map:
             func_map[char]()
 
     def get_img(self):
         img = np.zeros((self.resolution[1], self.resolution[0], 3))
         img = cv.ellipse(img, self.center, (self.radius, self.radius), 0, 0, 360, self.color, -1)
+        if self.rainbow:
+            cmap = plt.get_cmap('hsv')
+            for r in range(1, self.radius):
+                x = r / self.rainbow_size % 1
+                color = [int(255 * val) for val in cmap(x)[:3]]
+                img = cv.ellipse(img, self.center, (r, r), 0, 0, 360, color, 2)
         if self.blur > 0:
             img = cv.blur(img.astype(np.uint8), (self.blur, self.blur))
         img = (img * self.contrast).astype(np.uint8)
@@ -293,7 +324,8 @@ CONTROLS
     w (+ shift) : increase (decrease) wavelength
     l (+ shift) : increase (decrease) blur 
     c (+ shift) : increase (decrease) contrast
-    o           : change color
+    o (+ shift) : change (remove) color
+    y (+ shift) : tilt scallop pattern clockwise (counter-clockwise)
 
     NOTE: shift + <key> will perform the inverse operation (when available)
 """
@@ -311,9 +343,10 @@ class ScallopyBlock:
         self.rotation = 1
         self.contrast = 1.0
         self.color_idx = 0
-        self.color = (255, 255, 255)
+        self.color = [255, 255, 255]
         self.top = 0
         self.bottom = 0
+        self.tilt = 0
 
     def move_down(self):
         self.center[0] += self.sensitivity
@@ -375,13 +408,24 @@ class ScallopyBlock:
         self.sensitivity = max(1, self.sensitivity - 1)
         print("\rsensivity: \033[32m{:d}\033[0m px".format(self.sensitivity), end='')
 
+    def increase_tilt(self):
+        self.tilt = min(90, self.tilt + self.sensitivity)
+
+    def decrease_tilt(self):
+        self.tilt = max(-90, self.tilt - self.sensitivity)
+
     def rotate(self):
         self.rotation = (self.rotation + 1) % 4
 
     def change_color(self):
         colors = [(255, 255, 255), (255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 255, 255)]
+        cmap = plt.get_cmap('hsv')
         self.color_idx = 0 if self.color_idx == len(colors)-1 else self.color_idx + 1
-        self.color = colors[self.color_idx]
+        self.color_idx = (self.color_idx + self.sensitivity / 255) % 1
+        self.color = np.array([255 * val for val in cmap(self.color_idx)[:3]])
+
+    def remove_color(self):
+        self.color = [255, 255, 255]
 
     def handle_key(self, key):
         char = key if type(key) is str else chr(key)
@@ -391,17 +435,19 @@ class ScallopyBlock:
                     "a": self.increase_amplitude, "A": self.decrease_amplitude, "l": self.increase_blur,
                     "L": self.decrease_blur, "r": self.rotate,
                     "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,
-                    "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color}
+                    "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color,
+                    "O": self.remove_color, "y": self.increase_tilt, "Y": self.decrease_tilt}
         if char in func_map:
             func_map[char]()
 
     def get_img(self):
-        img = np.zeros((self.resolution[0], self.resolution[1]), dtype=np.uint8)
+        img = np.zeros((self.resolution[0], self.resolution[1], 3), dtype=np.uint8)
         for i in np.arange(0, img.shape[0], 0.2):
-            j = int(self.center[1] + self.amplitude * np.cos((i - self.center[0])*2*np.pi/self.wavelength))
-            img[int(i), j] = 255
+            j = int(self.center[1] + self.amplitude * np.cos((i - self.center[0])*2*np.pi/self.wavelength) - (i - self.center[0]) * np.tan(self.tilt/4*np.pi/180))
+            if 0 <= j < img.shape[1]:
+                img[int(i), j, :] = self.color
         mask = np.zeros((img.shape[0]+2, img.shape[1]+2), dtype=np.uint8)
-        _, img, _, _ = cv.floodFill(img, mask, (0, 0), (255, 255, 255))
+        _, img, _, _ = cv.floodFill(img, mask, (0, 0), self.color)
 
         if self.top > 0:
             img[:self.top, :] = 0
@@ -418,8 +464,8 @@ class ScallopyBlock:
 
 def main(args):
     if len(args) < 2 or args[1] not in ['cylinder', 'sphere', 'scallops']:
-        print("\033[95m warning: Neither 'cylinder', 'sphere' nor 'scallops' given as argument, defaulting to 'scallops'. \033[0m")
-        args = ['', 'scallops']
+        args = ['', 'sphere']
+        print("\033[95m warning: Neither 'cylinder', 'sphere' nor 'scallops' given as argument, defaulting to {:s}. \033[0m".format(args[1]))
     obj = {'cylinder': Cylinder, 'sphere': Sphere, 'scallops': ScallopyBlock}[args[1]]()
 
     cv.namedWindow("window", cv.WND_PROP_FULLSCREEN)

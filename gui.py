@@ -1,5 +1,5 @@
 import base64
-
+import urllib.parse
 import flet as ft
 import os
 import numpy as np
@@ -8,6 +8,8 @@ from glob import glob
 import cv2 as cv
 from monitor_mask import find_mask_and_ice, find_edges
 
+
+print(ft.version.flet_version)
 
 FOLDER = "/Users/simenbootsma/Sync/sync_folder"  # must contain jpg, updates, commands folders
 update_paths = sorted(glob(FOLDER + "/updates/*.txt"))
@@ -18,6 +20,7 @@ last_img_update_time = None
 start_time = None
 DASH_IMG_PATH = '/Users/simenbootsma/PycharmProjects/adaptiveMask/_temp_dashboard_image.jpg'
 SHOWING_CONTOUR = False
+SKIP_TOP = 10  # skip top ... pixel rows
 temp_img = ''
 
 
@@ -31,7 +34,7 @@ def main(page: ft.Page):
         WINDOW_OPEN = False
 
     # Dashboard
-    def pick_folder_result(e: ft.FilePickerResultEvent):
+    def pick_folder_result(e):
         global FOLDER, update_paths, image_paths, last_update_time, start_time
         data_folder.value = e.path
         data_folder.update()
@@ -41,15 +44,16 @@ def main(page: ft.Page):
         last_update_time, start_time = None, None
 
     data_folder = ft.Text(FOLDER)
-    data_folder_picker = ft.FilePicker(on_result=pick_folder_result)
+    data_folder_picker = ft.FilePicker(on_upload=pick_folder_result)
     page.overlay.append(data_folder_picker)
 
     live_image = ft.Image(
+        src='',
         width=300,
         height=500,
-        fit=ft.ImageFit.FIT_HEIGHT,
+        fit=ft.BoxFit.FIT_HEIGHT,
         repeat=ft.ImageRepeat.NO_REPEAT,
-        border_radius=ft.border_radius.all(10),
+        border_radius=ft.BorderRadius.all(10),
     )
 
     def toggle_contour(e):
@@ -59,7 +63,8 @@ def main(page: ft.Page):
         if len(image_paths) == 0:
             return
 
-        img = cv.imread(image_paths[-1])
+        last_image = sorted(image_paths, key=lambda fn: os.path.getmtime(fn), reverse=True)[0]
+        img = cv.imread(last_image)[SKIP_TOP:, :]
         if SHOWING_CONTOUR:
             img = draw_contour(img)
         b64_img = cv.imencode('.jpg', img)[1]
@@ -70,13 +75,13 @@ def main(page: ft.Page):
         gray_img = np.mean(img, axis=2).astype(np.uint8)
         contour = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
         contour = remove_inner_contour_points(contour)
-        I25 = np.argsort(contour[:, 1])[int(0.24 * len(contour)):int(0.26 * len(contour))]
-        I75 = np.argsort(contour[:, 1])[int(0.74 * len(contour)):int(0.76 * len(contour))]
-        dx = np.mean(contour[I75, 0]) - np.mean(contour[I25, 0])
-        dy = np.mean(contour[I75, 1]) - np.mean(contour[I25, 1])
-
-        theta = np.arctan2(dx, dy) * 180 / np.pi
-        print("angle: {:.1} degrees".format(theta))
+        # I25 = np.argsort(contour[:, 1])[int(0.24 * len(contour)):int(0.26 * len(contour))]
+        # I75 = np.argsort(contour[:, 1])[int(0.74 * len(contour)):int(0.76 * len(contour))]
+        # dx = np.mean(contour[I75, 0]) - np.mean(contour[I25, 0])
+        # dy = np.mean(contour[I75, 1]) - np.mean(contour[I25, 1])
+        #
+        # theta = np.arctan2(dx, dy) * 180 / np.pi
+        # print("angle: {:.1} degrees".format(theta))
 
         img = cv.polylines(img, [contour.astype(np.int32)], isClosed=True, color=(0, 0, 255), thickness=4)
         return img
@@ -94,7 +99,7 @@ def main(page: ft.Page):
         save_button.disabled = False
         save_button.update()
 
-    save_button = ft.ElevatedButton('Save changes', on_click=save_changes)
+    save_button = ft.FilledButton('Save changes', on_click=save_changes)
 
     def on_hover(e):
         if e.control.visible:
@@ -106,7 +111,7 @@ def main(page: ft.Page):
                 e.control.content = ft.Text("{:.2f}".format(rel_err), color=color)
                 e.control.width = 50
                 e.control.height = 50
-                e.control.alignment = ft.alignment.center
+                e.control.alignment = ft.Alignment.CENTER
             else:
                 e.control.content = None
                 e.control.width = 40 if '00' in e.control.key else 30
@@ -119,41 +124,51 @@ def main(page: ft.Page):
     last_update_text = ft.Text("Last update: -",)
     last_image_text = ft.Text("Last image update: -", )
     run_time_text = ft.Text("Run time     --:--:--", size=30, weight=ft.FontWeight.W_300)
-    status_boxes = {k: [ft.Container(width=40, height=40, visible=False, border_radius=3, border=ft.border.all(2, ft.colors.GREEN_50), on_hover=on_hover, key=k+'_box00')]
+    volume_text = ft.Markdown("### https://latex.codecogs.com/png.latex?" + urllib.parse.quote("V/V_0 = --"))
+    status_boxes = {k: [ft.Container(width=40, height=40, visible=False, border_radius=3, border=ft.Border.all(2, ft.Colors.GREEN_50), on_hover=on_hover, key=k+'_box00')]
                        + [ft.Container(width=30, height=30, visible=False, border_radius=3, on_hover=on_hover, key='{:s}_box{:02d}'.format(k, i+1)) for i in range(cboard.BUFFER_SIZE-1)] for k in params}
     status_rows = [ft.Row([ft.Container(ft.Text(k, size=20, weight=ft.FontWeight.BOLD), width=100, height=50, alignment=ft.Alignment(-1, 0))] + status_boxes[k], spacing=20) for k in params]
     status_rows.insert(0, ft.Row([ft.Container(width=100, height=50), ft.Container(ft.Text("<---  time", size=20, weight=ft.FontWeight.BOLD), alignment=ft.Alignment(-1, 0))], spacing=20))
 
     t = ft.Tabs(
-        selected_index=0,
+        length=2,
+        selected_index=1,
         animation_duration=300,
-        tabs=[
-            ft.Tab(
-                text="Dashboard",
-                icon=ft.icons.DASHBOARD,
-                content=ft.Container(
-                    ft.SafeArea(ft.Row([
-                        ft.Column([
-                            ft.Row([
-                                ft.ElevatedButton(text='Choose data folder', icon=ft.icons.FOLDER,
-                                                  on_click=lambda _: data_folder_picker.get_directory_path()),
-                                data_folder
-                            ]),
-                            run_time_text
-                        ] + status_rows, spacing=10),
-                        ft.Column([last_image_text, contour_checkbox, live_image]),
-                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)), margin=20
+        content=[ft.Column(expand=True, controls=[
+            ft.TabBar(tabs=[
+                ft.Tab(
+                    label="Dashboard",
+                    icon=ft.Icons.DASHBOARD
                 ),
-            ),
+                ft.Tab(
+                    label="Controls",
+                    icon=ft.Icons.CONTROL_CAMERA,
+                )
+            ]),
 
-            ft.Tab(
-                text="Controls",
-                icon=ft.icons.CONTROL_CAMERA,
-                content=ft.Container(
+            ft.TabBarView(
+                expand=True,
+                controls=[
+                    ft.Container(
+                        ft.SafeArea(ft.Row([
+                            ft.Column([
+                                          ft.Row([
+                                              ft.FilledButton(content='Choose data folder', icon=ft.Icons.FOLDER,
+                                                              on_click=lambda
+                                                                  _: data_folder_picker.get_directory_path()),
+                                              data_folder
+                                          ]),
+                                          run_time_text,
+                                          volume_text
+                                      ] + status_rows, spacing=10),
+                            ft.Column([last_image_text, contour_checkbox, live_image]),
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)), margin=20
+                    ),
+                    ft.Container(
                     ft.SafeArea(ft.Column([
                         ft.Row([last_update_text]),
                         ft.Row([
-                            ft.Column([ft.Text(""), ft.Text("Position", weight=ft.FontWeight.BOLD), ft.Text("Width", weight=ft.FontWeight.BOLD), ft.Text("Height", weight=ft.FontWeight.BOLD), ft.Text("Curvature", weight=ft.FontWeight.BOLD)], spacing=row_h, alignment=ft.alignment.center, width=col_w),
+                            ft.Column([ft.Text(""), ft.Text("Position", weight=ft.FontWeight.BOLD), ft.Text("Width", weight=ft.FontWeight.BOLD), ft.Text("Height", weight=ft.FontWeight.BOLD), ft.Text("Curvature", weight=ft.FontWeight.BOLD)], spacing=row_h, alignment=ft.Alignment.CENTER, width=col_w),
                             ft.Column([ft.Text("Current value", text_align=ft.TextAlign.CENTER, width=int(1.7*col_w), weight=ft.FontWeight.BOLD)] + [ft.Row([cboard.buttons[k + '_minus'], cboard.texts[k+'_current'], cboard.buttons[k + '_plus']], spacing=0, height=row_h-5, alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
                                        for k in params], spacing=row_h, width=int(1.7*col_w)),
                             ft.Column([ft.Text("Target", text_align=ft.TextAlign.CENTER, width=int(1.7 * col_w),
@@ -175,30 +190,38 @@ def main(page: ft.Page):
                                 spacing=row_h, width=col_w)
                         ], spacing=5),
                         ft.Container(
-                            ft.Row([ft.ElevatedButton(text='Reset', on_click=cboard.reset), save_button]), margin=30
+                            ft.Row([ft.FilledButton('Reset', on_click=cboard.reset), save_button]), margin=30
                         )])
                     ), margin=20
-                ),
+                )],
             ),
+        ])
         ],
         expand=1,
     )
 
     page.add(t)
-    page.on_close = quit_program
-    page.window.height = 800
-    page.window.width = 1200
-    page.update()
+    # page.on_close = quit_program
+    # page.window.height = 800
+    # page.window.width = 1200
+    # page.update()
+
+    try:
+        first_image = sorted(image_paths, key=lambda fn: os.path.getmtime(fn))[0]
+        first_volume = compute_volume(first_image)
+    except:
+        first_volume = np.nan
 
     while WINDOW_OPEN:
-        new_updates = [fn for fn in sorted(glob(FOLDER + "/updates/*.txt")) if fn not in update_paths]
-        new_images = [fn for fn in sorted(glob(FOLDER + "/jpg/*.jpg")) if fn not in image_paths]
+        new_updates = [fn for fn in sorted(glob(FOLDER + "/updates/*.txt")) if last_update_time is None or os.path.getmtime(fn) > last_update_time]
+        new_images = [fn for fn in sorted(glob(FOLDER + "/jpg/*.jpg")) if last_img_update_time is None or os.path.getmtime(fn) > last_img_update_time]
 
         if last_update_time is None and len(update_paths) > 0 and len(image_paths) > 0:
             cboard.update(update_paths[-1])
             last_update_time = os.path.getmtime(update_paths[-1])
             start_time = os.path.getmtime(update_paths[0])
-            b64_im = cv.imencode('.jpg', cv.imread(image_paths[-1]))[1]
+            last_image = sorted(image_paths, key=lambda fn: os.path.getmtime(fn), reverse=True)[0]
+            b64_im = cv.imencode('.jpg', cv.imread(last_image)[SKIP_TOP:])[1]
             live_image.src_base64 = base64.b64encode(b64_im).decode("utf-8")
             live_image.update()
         elif last_update_time is None:
@@ -221,20 +244,29 @@ def main(page: ft.Page):
                 for i in range(len(cboard.rel_error_history[k])):
                     err = cboard.rel_error_history[k][i]
                     status_boxes[k][i].visible = True
-                    status_boxes[k][i].bgcolor = ft.colors.RED_300 if abs(err) >= 2 else ft.colors.AMBER_300 if abs(
-                        err) >= 1 else ft.colors.GREEN_300
+                    status_boxes[k][i].bgcolor = ft.Colors.RED_300 if abs(err) >= 2 else ft.Colors.AMBER_300 if abs(
+                        err) >= 1 else ft.Colors.GREEN_300
                     status_boxes[k][i].update()
             update_paths += new_updates
 
         if len(new_images) > 0:
-            im = cv.imread(new_images[-1])
+            last_image = sorted(image_paths, key=lambda fn: os.path.getmtime(fn), reverse=True)[0]
+            im = cv.imread(last_image)
             if SHOWING_CONTOUR:
                 im = draw_contour(im)
-            b64_im = cv.imencode('.jpg', im)[1]
+            b64_im = cv.imencode('.jpg', im)[1][SKIP_TOP:]
             live_image.src_base64 = base64.b64encode(b64_im).decode("utf-8")
             image_paths += new_images
             live_image.update()
             last_img_update_time = time.time()
+
+            try:
+                vol = compute_volume(last_image)
+                print("\rV = {:.2f}V0".format(vol/first_volume), end='')
+                volume_text.value = "### https://latex.codecogs.com/png.latex?" + urllib.parse.quote("V/V_0 = {:.2f}".format(vol/first_volume))
+                volume_text.update()
+            except:
+                pass
 
         if last_update_time is not None:
             dt = time.time() - last_update_time
@@ -284,8 +316,8 @@ class ControlBoard:
         self.rel_error_history = {k: [] for k in self.parameters}
 
     def init_buttons(self):
-        minus_button_style = {'icon': ft.icons.REMOVE}
-        plus_button_style = {'icon': ft.icons.ADD}
+        minus_button_style = {'icon': ft.Icons.REMOVE}
+        plus_button_style = {'icon': ft.Icons.ADD}
 
         buttons = {'position_minus': ft.TextButton(on_click=self.decrease_position,
                                                    on_long_press=self.decrease_position_by_10, **minus_button_style),
@@ -390,12 +422,12 @@ class ControlBoard:
             self.texts[k + '_threshold'].value = '-' if np.isnan(self.display_thresholds[k]) else style.format(self.display_thresholds[k])
             self.texts[k + '_target'].value = '-' if np.isnan(self.display_targets[k]) else style.format(self.display_targets[k])
 
-            self.texts[k + '_current'].color = ft.colors.BLUE_300 if (self.is_changed[k] and self.current_values[k] != self.display_values[k]) else ft.colors.WHITE
-            self.texts[k + '_threshold'].color = ft.colors.BLUE_300 if (
-                        self.is_threshold_changed[k] and self.thresholds[k] != self.display_thresholds[k]) else ft.colors.WHITE
-            self.texts[k + '_target'].color = ft.colors.BLUE_300 if (
-                        self.is_target_changed[k] and self.targets[k] != self.display_targets[k]) else ft.colors.WHITE
-            error_color = ft.colors.RED_300 if (np.abs(self.errors[k]) > 2 * self.thresholds[k]) else (ft.colors.AMBER_300 if (np.abs(self.errors[k]) > self.thresholds[k]) else ft.colors.GREEN_300)
+            self.texts[k + '_current'].color = ft.Colors.BLUE_300 if (self.is_changed[k] and self.current_values[k] != self.display_values[k]) else ft.Colors.WHITE
+            self.texts[k + '_threshold'].color = ft.Colors.BLUE_300 if (
+                        self.is_threshold_changed[k] and self.thresholds[k] != self.display_thresholds[k]) else ft.Colors.WHITE
+            self.texts[k + '_target'].color = ft.Colors.BLUE_300 if (
+                        self.is_target_changed[k] and self.targets[k] != self.display_targets[k]) else ft.Colors.WHITE
+            error_color = ft.Colors.RED_300 if (np.abs(self.errors[k]) > 2 * self.thresholds[k]) else (ft.Colors.AMBER_300 if (np.abs(self.errors[k]) > self.thresholds[k]) else ft.Colors.GREEN_300)
             self.texts[k + '_abs_error'].color = error_color
             self.texts[k + '_rel_error'].color = error_color
 
@@ -403,6 +435,8 @@ class ControlBoard:
                 try:
                     self.texts[k + s].update()
                 except AssertionError:
+                    pass
+                except RuntimeError:
                     pass
 
     def increase_position(self, e):
@@ -708,6 +742,21 @@ def remove_inner_contour_points(ice_edges, dy=1):
     return np.array(left + right)
 
 
-ft.app(main)
+def compute_volume(img_path):
+    img = cv.imread(img_path)[SKIP_TOP:, :]
+    gray_img = np.mean(img, axis=2).astype(np.uint8)
+    c = find_edges(find_mask_and_ice(gray_img)[1], largest_only=True)
+    c = remove_inner_contour_points(c)
+    xmin, ymin = np.min(c, axis=0).astype(np.int32)
+    xmax, ymax = np.max(c, axis=0).astype(np.int32)
+    m = np.zeros((ymax - ymin + 1, xmax - xmin + 1), dtype=np.int32)
+    cv.fillPoly(m, [(c - np.array([xmin, ymin])).astype(np.int32)], color=(1, 1, 1))
+
+    d = np.sum(m, axis=1)
+    V = np.sum(np.pi * (d / 2) ** 2)
+    return V
+
+
+ft.run(main)
 
 
