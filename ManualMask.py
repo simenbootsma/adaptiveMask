@@ -281,8 +281,9 @@ class Sphere:
         self.rainbow_size = max(5, self.rainbow_size - self.sensitivity)
 
     def handle_key(self, key):
-        char = chr(key)
-        func_map = {chr(2): self.move_left, chr(3): self.move_right, chr(0): self.move_up, chr(1): self.move_down,
+        char = key if type(key) is str else chr(key)
+        print(char)
+        func_map = {"a": self.move_left, "d": self.move_right, "w": self.move_up, "s": self.move_down,
                     "r": self.increase_radius, "R": self.decrease_radius, "b": self.increase_blur,
                     "B": self.decrease_blur,
                     "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,

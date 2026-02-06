@@ -85,10 +85,10 @@ def main(page: ft.Page):
 
     page.add(ft.SafeArea(ft.Column([move_mouse_button, keep_warm_slider, run_mask_button, start_cam_button], spacing=20)))
     page.window.width = 200
-    page.window.height = 200
+    page.window.height = 300
     page.update()
 
 
 if __name__ == '__main__':
-    ft.app(main, view=ft.AppView.FLET_APP_WEB)
+    ft.app(main)
 

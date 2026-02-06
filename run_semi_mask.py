@@ -32,7 +32,7 @@ THRESHOLDS = {
 }
 
 
-def main(save_contours=True):
+def main(save_contours=False):
     import rawpy
     global THRESHOLDS
     # initialize
@@ -40,7 +40,7 @@ def main(save_contours=True):
     cyl.sensitivity = 10  # sensitivity in screen pixels
 
     cv_window()
-    log_file = open('logs/log' + datetime_string() + '.txt', 'w')
+    #log_file = open('logs/log' + datetime_string() + '.txt', 'w')
     for s in ['jpg', 'updates', 'commands']:
         if not os.path.exists(ONEDRIVE_FOLDER + s):
             os.mkdir(ONEDRIVE_FOLDER + s)
@@ -98,16 +98,16 @@ def main(save_contours=True):
                     
                     for a in auto_actions:
                         cyl.handle_key(a)
-                    if len(auto_actions) > 0:
-                        log_actions(log_file, auto_actions, auto=True)
+                    #if len(auto_actions) > 0:
+                        #log_actions(log_file, auto_actions, auto=True)
                     if errors is not None and not DEMO:
                         give_update(errors, cyl, img_count)
                 except:
                     print("An error occurred in auto-updating the screen")
                 for a in auto_actions:
                     cyl.handle_key(a)
-                if len(auto_actions) > 0:
-                    log_actions(log_file, auto_actions, auto=True)
+                #if len(auto_actions) > 0:
+                    #log_actions(log_file, auto_actions, auto=True)
                 if errors is not None and not DEMO:
                     give_update(errors, cyl, img_count)
 
@@ -122,7 +122,7 @@ def main(save_contours=True):
                 command_paths.append(cf)
             if len(command_actions) > 0:
                 print(command_actions)
-                log_actions(log_file, command_actions, auto=False)
+                #log_actions(log_file, command_actions, auto=False)
             for a in command_actions:
                 if len(a) > 1 and 'threshold' in a[0]:
                     THRESHOLDS[a[0][0]] = a[1]
@@ -151,16 +151,16 @@ def main(save_contours=True):
             auto_enabled = not auto_enabled
             line = "Auto mode {:s}".format("enabled" if auto_enabled else "disabled")
             print(line)
-            log_file.write("[{:s}] ".format(datetime.now().ctime()) + line + "\n")
+            #log_file.write("[{:s}] ".format(datetime.now().ctime()) + line + "\n")
         elif key != -1:
             cyl.handle_key(key)
-            log_actions(log_file, [chr(key)], auto=False)
+            #log_actions(log_file, [chr(key)], auto=False)
 
         # show screen
         cv.imshow("window", cyl.get_img())
 
     cv.destroyWindow("window")
-    log_file.close()
+    #log_file.close()
 
 
 def compute_actions_fuzzy(img, save_folder=None, count=None, return_errors=False):
