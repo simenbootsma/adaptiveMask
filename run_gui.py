@@ -90,5 +90,5 @@ def main(page: ft.Page):
 
 
 if __name__ == '__main__':
-    ft.app(main)
+    ft.app(main, assets_dir="C:/Users/local.la/Documents/Masking/adaptiveMask/assets")
 

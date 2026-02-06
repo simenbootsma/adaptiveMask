@@ -204,7 +204,7 @@ class Cylinder:
 
 
 class Sphere:
-    def __init__(self, resolution=(1920, 1080)):
+    def __init__(self, resolution=(1920, 1200)):
         self.resolution = resolution
         self.sensitivity = int(resolution[1] / 500)
         self.center = [resolution[0] // 2, resolution[1] // 2]
@@ -258,12 +258,13 @@ class Sphere:
         self.color = colors[self.color_idx]
 
     def handle_key(self, key):
-        char = chr(key)
-        func_map = {chr(2): self.move_left, chr(3): self.move_right, chr(0): self.move_up, chr(1): self.move_down,
+        char = key if type(key) is str else chr(key)
+        print(char)
+        func_map = {"a": self.move_left, "d": self.move_right, "w": self.move_up, "s": self.move_down,
                     "r": self.increase_radius, "R": self.decrease_radius, "b": self.increase_blur,
                     "B": self.decrease_blur,
                     "c": self.increase_contrast, "C": self.decrease_contrast, chr(127): self.__init__,
-                    "s": self.increase_sensitivity, "S": self.decrease_sensivity, "o": self.change_color}
+                    "x": self.increase_sensitivity, "X": self.decrease_sensivity, "o": self.change_color}
         if char in func_map:
             func_map[char]()
 
@@ -419,11 +420,11 @@ class ScallopyBlock:
 def main(args):
     if len(args) < 2 or args[1] not in ['cylinder', 'sphere', 'scallops']:
         print("\033[95m warning: Neither 'cylinder', 'sphere' nor 'scallops' given as argument, defaulting to 'scallops'. \033[0m")
-        args = ['', 'scallops']
+        args = ['', 'sphere']
     obj = {'cylinder': Cylinder, 'sphere': Sphere, 'scallops': ScallopyBlock}[args[1]]()
 
     cv.namedWindow("window", cv.WND_PROP_FULLSCREEN)
-    # cv.moveWindow("window", 2000, 100)
+    # cv.moveWindow("window", 3000, 500)
     cv.setWindowProperty("window", cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
     while True:
         cv.imshow("window", obj.get_img())
